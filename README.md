@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/readme-banner.png" width="720" alt="Ferry — carry your files to your new OS">
+</p>
+
 # Ferry
 
 Ferry is a free desktop app that makes switching or reinstalling a computer's operating system safe for people who aren't technical. It downloads an official OS image, writes a bootable USB drive, and — on the same USB drive — backs up the user's personal files so nothing gets lost in the process.
