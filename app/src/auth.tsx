@@ -14,15 +14,21 @@ export interface Account {
 
 interface AuthState {
   account: Account | null;
+  plannedTier: string | null;
+  setPlannedTier: (tier: string | null) => void;
   signUp: (name: string, email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => void;
+  updateName: (name: string) => string | null;
+  changePassword: (current: string, next: string) => Promise<string | null>;
+  deleteAccount: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 const ACCOUNTS_KEY = "ferry.accounts";
 const SESSION_KEY = "ferry.session";
+const TIER_KEY = "ferry.plannedTier";
 
 function loadAccounts(): Account[] {
   try {
@@ -42,6 +48,15 @@ async function sha256Hex(text: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account | null>(null);
+  const [plannedTier, setPlannedTierState] = useState<string | null>(() =>
+    localStorage.getItem(TIER_KEY),
+  );
+
+  function setPlannedTier(tier: string | null) {
+    setPlannedTierState(tier);
+    if (tier) localStorage.setItem(TIER_KEY, tier);
+    else localStorage.removeItem(TIER_KEY);
+  }
 
   useEffect(() => {
     const email = localStorage.getItem(SESSION_KEY);
@@ -87,8 +102,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccount(null);
   }
 
+  function persist(accounts: Account[]) {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  }
+
+  function updateName(name: string): string | null {
+    const clean = name.trim();
+    if (!clean) return "Enter a display name.";
+    if (!account) return "You are not signed in.";
+    const accounts = loadAccounts().map(a =>
+      a.email === account.email ? { ...a, name: clean } : a,
+    );
+    persist(accounts);
+    setAccount({ ...account, name: clean });
+    return null;
+  }
+
+  async function changePassword(current: string, next: string): Promise<string | null> {
+    if (!account) return "You are not signed in.";
+    if ((await sha256Hex(current)) !== account.passHash) {
+      return "Current password is wrong.";
+    }
+    if (next.length < 8) return "New password must be at least 8 characters.";
+    const hash = await sha256Hex(next);
+    const accounts = loadAccounts().map(a =>
+      a.email === account.email ? { ...a, passHash: hash } : a,
+    );
+    persist(accounts);
+    setAccount({ ...account, passHash: hash });
+    return null;
+  }
+
+  function deleteAccount() {
+    if (!account) return;
+    persist(loadAccounts().filter(a => a.email !== account.email));
+    localStorage.removeItem(SESSION_KEY);
+    setAccount(null);
+  }
+
   return (
-    <AuthContext.Provider value={{ account, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        account,
+        plannedTier,
+        setPlannedTier,
+        signUp,
+        signIn,
+        signOut,
+        updateName,
+        changePassword,
+        deleteAccount,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

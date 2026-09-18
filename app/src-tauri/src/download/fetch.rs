@@ -44,7 +44,7 @@ async fn download(
     let client = Client::new();
 
     // Derive a safe filename from the bundled URL (strip query/fragment first).
-    let last_segment = url.split('/').last().unwrap_or("os-image.iso");
+    let last_segment = url.rsplit('/').next().unwrap_or("os-image.iso");
     let clean_segment = last_segment
         .split(['?', '#'])
         .next()

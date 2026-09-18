@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowLeft, CircleHelp, RotateCcw, Tags, UserRound, Usb } from "lucide-react";
 import { AuthProvider, useAuth } from "./auth";
 import { Welcome } from "./pages/Welcome";
 import { DriveSelect } from "./pages/DriveSelect";
@@ -14,7 +15,8 @@ import { RestoreProgress } from "./pages/RestoreProgress";
 import { AppPicker } from "./pages/AppPicker";
 import { Pricing } from "./pages/Pricing";
 import { Faq } from "./pages/Faq";
-import { Account } from "./pages/Account";
+import { Account, type AccountTab } from "./pages/Account";
+import { recordBackup, recordRestore } from "./history";
 import type {
   BackupLocation,
   DriveInfo,
@@ -58,6 +60,7 @@ type View = "wizard" | "pricing" | "faq" | "account";
 function Shell() {
   const { account } = useAuth();
   const [view, setView] = useState<View>("wizard");
+  const [accountTab, setAccountTab] = useState<AccountTab>("profile");
   const [step, setStep] = useState<Step>("welcome");
   const [drive, setDrive] = useState<DriveInfo | null>(null);
   const [os, setOs] = useState<OsSource | null>(null);
@@ -87,53 +90,98 @@ function Shell() {
   }
 
   const back = view === "wizard" ? BACKUP_BACK[step] : undefined;
-  const nav = (v: View, label: string) => (
-    <button
-      key={v}
-      onClick={() => setView(v)}
-      className={`text-sm px-1 ${view === v ? "text-gray-900 font-semibold" : "text-gray-500 hover:text-gray-900"}`}
-    >
-      {label}
-    </button>
+  const NAV: { id: View; label: string; icon: typeof Usb }[] = [
+    { id: "wizard", label: "Migrate", icon: Usb },
+    { id: "pricing", label: "Pricing", icon: Tags },
+    { id: "faq", label: "FAQ", icon: CircleHelp },
+    { id: "account", label: account ? account.name.split(" ")[0] : "Sign in", icon: UserRound },
+  ];
+
+  const sideNav = (
+    <>
+      {NAV.map(item => {
+        const Icon = item.icon;
+        const active = view === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => {
+              if (item.id === "account") setAccountTab("profile");
+              setView(item.id);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition ${
+              active
+                ? "bg-brand-50 text-brand-700 font-semibold"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="truncate">{item.label}</span>
+          </button>
+        );
+      })}
+    </>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-8 flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-3xl font-bold">Ferry</h1>
-            <p className="text-gray-600 text-sm">Secure Backup & OS Reinstallation Assistant</p>
-          </div>
-          <nav className="flex gap-4 items-center">
-            {nav("wizard", "Migrate")}
-            {nav("pricing", "Pricing")}
-            {nav("faq", "FAQ")}
-            {nav("account", account ? account.name.split(" ")[0] : "Sign in")}
-          </nav>
-          <div className="flex gap-3 items-center">
-            {back && (
-              <button
-                onClick={() => setStep(back)}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                ← Back
-              </button>
-            )}
-            {view === "wizard" && step !== "welcome" && (
-              <button
-                onClick={restart}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Start over
-              </button>
-            )}
-          </div>
+    <div className="h-screen w-full bg-gray-50 text-gray-900 flex overflow-hidden">
+      {/* Left sidebar (desktop) */}
+      <aside className="hidden md:flex w-60 shrink-0 flex-col bg-white border-r border-gray-200 py-6 px-4">
+        <div className="px-2 mb-8">
+          <h1 className="text-2xl font-bold">Ferry</h1>
+          <p className="text-gray-500 text-xs mt-0.5">Backup & OS Reinstallation Assistant</p>
+        </div>
+        <nav className="space-y-1 flex-1">
+          {sideNav}
+        </nav>
+        <div className="pt-4 border-t border-gray-100 space-y-1">
+          {back && (
+            <button
+              onClick={() => setStep(back)}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-900"
+            >
+              <ArrowLeft className="w-5 h-5 shrink-0" /> Back
+            </button>
+          )}
+          {view === "wizard" && step !== "welcome" && (
+            <button
+              onClick={restart}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-500 hover:text-gray-900"
+            >
+              <RotateCcw className="w-5 h-5 shrink-0" /> Start over
+            </button>
+          )}
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Compact top bar (narrow screens only) */}
+        <header className="md:hidden flex items-center gap-1 bg-white border-b border-gray-200 px-3 py-2 overflow-x-auto shrink-0">
+          <span className="font-bold mr-2 shrink-0">Ferry</span>
+          {NAV.map(item => (
+            <button
+              key={item.id}
+              onClick={() => {
+                if (item.id === "account") setAccountTab("profile");
+                setView(item.id);
+              }}
+              className={`text-sm px-2 py-1 rounded whitespace-nowrap ${
+                view === item.id ? "text-brand-700 font-semibold" : "text-gray-500"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </header>
 
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="max-w-3xl mx-auto pb-12">
         {view === "pricing" && <Pricing onAccount={() => setView("account")} />}
         {view === "faq" && <Faq />}
-        {view === "account" && <Account />}
+        {view === "account" && (
+          <Account onPricing={() => setView("pricing")} tab={accountTab} onTabChange={setAccountTab} />
+        )}
         {view === "wizard" && step === "welcome" && (
           <Welcome onBackup={() => setStep("drives")} onRestore={() => setStep("restore-detect")} />
         )}
@@ -171,6 +219,14 @@ function Shell() {
             password={password}
             onDone={m => {
               setManifest(m);
+              if (drive && os) {
+                recordBackup({
+                  drive: drive.drive_letter,
+                  os: os.label,
+                  files: m.files.length,
+                  bytes: m.files.reduce((sum, f) => sum + f.size_bytes, 0),
+                });
+              }
               setStep("download");
             }}
           />
@@ -212,6 +268,7 @@ function Shell() {
             onDone={(s, dir) => {
               setSummary(s);
               setStagingDir(dir);
+              recordRestore({ restored: s.restored, skipped: s.skipped, wifi: s.wifi_restored });
               setStep("apps");
             }}
           />
@@ -221,6 +278,8 @@ function Shell() {
         )}
           </>
         )}
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
 /// with one fresh random nonce per chunk. Plaintext is zipped to a temp file
 /// first, then encrypted chunk-by-chunk, so multi-GB backups never sit fully
 /// in RAM. Files without the magic header are rejected as legacy/foreign.
-use crate::encrypt::keygen::KEY_LEN;
+use crate::crypto::keygen::KEY_LEN;
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Key, Nonce,
@@ -212,7 +212,7 @@ fn read_up_to(reader: &mut std::fs::File, buf: &mut [u8]) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encrypt::keygen::derive_key;
+    use crate::crypto::keygen::derive_key;
 
     #[test]
     fn chunked_round_trip_preserves_bytes() {

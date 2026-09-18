@@ -30,7 +30,7 @@ export function ExcludeReview({ scan, extraExcludes, onScan, onNext }: Props) {
   }
 
   useEffect(() => {
-    if (!scan) void runScan([]);
+    if (!scan) void runScan(pending);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

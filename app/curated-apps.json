@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Steam",
+    "url": "https://store.steampowered.com",
+    "note": "Vendor homepage; user downloads the installer from there"
+  },
+  {
+    "name": "Zoom",
+    "url": "https://zoom.us",
+    "note": "Vendor homepage; user downloads the installer from there"
+  },
+  {
+    "name": "Slack",
+    "url": "https://slack.com",
+    "note": "Vendor homepage; user downloads the installer from there"
+  }
+]

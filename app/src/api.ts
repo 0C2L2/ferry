@@ -22,6 +22,7 @@ export const api = {
     invoke<void>("copy_files_to_usb", { files, usbRoot }),
   verifyBackup: (files: FileToBackup[], usbRoot: string, skipped: [string, string][]) =>
     invoke<Manifest>("verify_backup", { files, usbRoot, skipped }),
+  readManifest: (backupDir: string) => invoke<Manifest>("read_manifest", { backupDir }),
   encryptBackup: (usbRoot: string, password: string) =>
     invoke<void>("encrypt_backup", { usbRoot, password }),
   downloadOs: (sourceId: string, destDir: string) =>

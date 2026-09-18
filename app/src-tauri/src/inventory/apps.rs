@@ -51,8 +51,16 @@ pub fn scan() -> Result<Vec<AppEntry>> {
         }
     }
 
+    // Merge Microsoft Store apps (separate pass: registry misses them).
+    for store_app in super::store::scan_store_apps_sync() {
+        if !seen.contains(&store_app.name) {
+            seen.insert(store_app.name.clone());
+            apps.push(store_app);
+        }
+    }
+
     // Sort alphabetically for consistent display.
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    apps.sort_by_key(|a| a.name.to_lowercase());
     Ok(apps)
 }
 

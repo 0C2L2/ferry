@@ -22,8 +22,8 @@ Ferry's planned layout follows Ventoy's shape, reused for two jobs at once:
 
 - Every file is backed up with its **full original path** recorded alongside it.
 - On restore, that path is rebuilt *inside* a `Restored/` folder placed on the new desktop, with the original folder names preserved exactly. Example: `C:\Users\John\Documents\taxes\2023.pdf` becomes `Restored\Users\John\Documents\taxes\2023.pdf` on the new desktop.
+- The drive prefix is stripped in the stored relative path (`C:\Users\...` → `Users/...`); the complete original path is always kept in `manifest.json`'s `original_path` field. Drive letters and reserved path characters (`:`, `\`, `/`) are therefore never used as folder names.
 - This works identically whether the restore target is the same OS or a completely different one, because the logic never tries to guess where something "should" go in the new system.
-- Windows drive letters and reserved path characters (`:`, `\`, `/`) require a small normalization pass since they are not valid folder names on every filesystem. `C:` becomes `C_drive`, etc.
 
 ## No installed-app restoration, by design
 

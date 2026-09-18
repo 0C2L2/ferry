@@ -28,6 +28,26 @@ pub async fn verify_backup(
         .map_err(|e| e.to_string())
 }
 
+/// Tauri command: read and parse manifest.json from a decrypted staging
+/// `Backup/` dir. Used to surface the backed-up OS edition so the user
+/// reinstalls a matching edition (Windows licenses don't cross editions).
+#[tauri::command]
+pub async fn read_manifest(backup_dir: String) -> Result<Manifest, String> {
+    read_manifest_file(backup_dir).map_err(|e| e.to_string())
+}
+
+fn read_manifest_file(backup_dir: String) -> Result<Manifest> {
+    use crate::safety::validate_backup_dir;
+    let backup_str = backup_dir;
+    let canonical = validate_backup_dir(&backup_str)?;
+    let manifest: Manifest = serde_json::from_str(
+        &std::fs::read_to_string(canonical.join("manifest.json"))
+            .context("manifest.json not found in backup")?,
+    )
+    .context("Failed to parse manifest.json")?;
+    Ok(manifest)
+}
+
 async fn build_and_verify_manifest(
     app: AppHandle,
     state: State<'_, AppState>,

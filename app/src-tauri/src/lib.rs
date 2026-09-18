@@ -7,7 +7,7 @@ mod types;
 mod safety;
 mod disk;
 mod backup;
-mod encrypt;
+mod crypto;
 mod download;
 mod inventory;
 mod browser;
@@ -49,15 +49,17 @@ pub fn run() {
             backup::scan::scan_user_files,
             backup::copy::copy_files_to_usb,
             backup::checksum::verify_backup,
+            backup::checksum::read_manifest,
             // ── Encrypt ───────────────────────────────────────────────────
-            encrypt::encrypt::encrypt_backup,
-            encrypt::decrypt::decrypt_backup,
+            crypto::encrypt::encrypt_backup,
+            crypto::decrypt::decrypt_backup,
             // ── Download ──────────────────────────────────────────────────
             download::fetch::download_os_image,
             download::sources::list_os_sources,
             // ── Inventory ─────────────────────────────────────────────────
             inventory::apps::scan_installed_apps,
             inventory::drivers::scan_drivers,
+            inventory::store::scan_store_apps,
             inventory::picker::resolve_app_tiers,
             inventory::picker::install_app,
             inventory::save::save_inventory,

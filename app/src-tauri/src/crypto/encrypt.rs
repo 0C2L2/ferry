@@ -2,8 +2,8 @@
 /// Streaming design: Backup/ is zipped to a temp file, then AES-256-GCM
 /// encrypted in 1 MB chunks, so multi-GB backups never sit fully in RAM.
 /// The plaintext Backup/ folder is deleted only after verification.
-use crate::encrypt::keygen::derive_key;
-use crate::encrypt::stream::{
+use crate::crypto::keygen::derive_key;
+use crate::crypto::stream::{
     check_manifest_in_zip, decrypt_file_chunked, encrypt_file_chunked, zip_directory_to_file,
 };
 use crate::safety::validate_usb_root;

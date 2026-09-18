@@ -2,8 +2,8 @@
 /// Reads the salt from backup.salt, re-derives the key, stream-decrypts the
 /// chunked AES-GCM container to a temp ZIP, then safely unzips the result
 /// into a staging directory.
-use crate::encrypt::keygen::derive_key_with_salt;
-use crate::encrypt::stream::decrypt_file_chunked;
+use crate::crypto::keygen::derive_key_with_salt;
+use crate::crypto::stream::decrypt_file_chunked;
 use crate::safety::{validate_staging_dir, validate_usb_root};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -64,7 +64,7 @@ fn run_decrypt(usb_root: PathBuf, password: &str, staging: PathBuf) -> Result<Pa
     });
     key_bytes.zeroize();
     decrypted?;
-    crate::encrypt::stream::check_manifest_in_zip(&zip_tmp_path)
+    crate::crypto::stream::check_manifest_in_zip(&zip_tmp_path)
         .context("Decrypted backup is missing a valid manifest")?;
 
     // 3. Unzip to staging directory, rejecting absolute/parent paths.

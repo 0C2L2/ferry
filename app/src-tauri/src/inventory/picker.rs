@@ -59,23 +59,68 @@ async fn install(winget_id: &str) -> Result<String> {
     }
 }
 
-async fn resolve(apps: &mut Vec<AppEntry>) -> Result<()> {
+async fn resolve(apps: &mut [AppEntry]) -> Result<()> {
+    let curated = load_curated_table();
     for app in apps.iter_mut() {
         if let Some(winget_id) = winget_lookup(&app.name).await {
             app.tier = 1;
             app.winget_id = Some(winget_id);
-        } else if app
-            .url_info
-            .as_deref()
-            .map(|u| is_http_url(u))
-            .unwrap_or(false)
-        {
+        } else if let Some(url) = curated_lookup(&curated, &app.name) {
+            // Human-verified vendor homepage from the bundled curated table.
+            // Still shown as an unverified vendor-site link in the UI.
+            app.tier = 2;
+            if !app.url_info.as_deref().is_some_and(is_http_url) {
+                app.url_info = Some(url);
+            }
+        } else if app.url_info.as_deref().is_some_and(is_http_url) {
             app.tier = 2;
         } else {
             app.tier = 3;
         }
     }
     Ok(())
+}
+
+/// Bundled curated table of well-known vendor homepages for common unpackaged
+/// software (see company/app-reinstall-picker.md §Tier 2).
+/// Entries must be human-verified official homepages — never search results,
+/// never deep installer links that can rot or be hijacked.
+#[derive(Debug, serde::Deserialize)]
+struct CuratedApp {
+    name: String,
+    url: String,
+}
+
+fn load_curated_table() -> Vec<CuratedApp> {
+    let raw = include_str!("../../../curated-apps.json");
+    let table: Vec<CuratedApp> = serde_json::from_str(raw).unwrap_or_default();
+    table
+        .into_iter()
+        .filter(|e| !e.name.trim().is_empty() && is_http_url(&e.url))
+        .collect()
+}
+
+fn curated_lookup(table: &[CuratedApp], app_name: &str) -> Option<String> {
+    let needle = app_name.trim().to_lowercase();
+    table
+        .iter()
+        .find(|e| e.name.trim().to_lowercase() == needle)
+        .map(|e| e.url.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn curated_table_loads_and_matches_exactly() {
+        let table = load_curated_table();
+        assert!(!table.is_empty());
+        assert!(curated_lookup(&table, "Steam").is_some());
+        assert!(curated_lookup(&table, "  steam  ").is_some());
+        assert!(curated_lookup(&table, "Steam Installer").is_none());
+        assert!(curated_lookup(&table, "").is_none());
+    }
 }
 
 /// Run `winget search --name "<name>" --exact --accept-source-agreements`

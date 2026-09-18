@@ -23,6 +23,7 @@ function TierBadge({ tier }: { tier: number }) {
 export function AppPicker({ stagingDir, summary, onRestart }: Props) {
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [drivers, setDrivers] = useState<DriverEntry[]>([]);
+  const [sourceOs, setSourceOs] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
@@ -42,6 +43,10 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
       })
       .catch(err => setError(String(err)))
       .finally(() => setLoading(false));
+    api
+      .readManifest(stagingDir)
+      .then(m => setSourceOs(m.source_os))
+      .catch(() => setSourceOs(null));
   }, [stagingDir]);
 
   async function install(app: AppEntry) {
@@ -75,6 +80,12 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
         From your pre-wipe inventory. Apps are never restored as binaries — only reinstalled
         from verified sources.
       </p>
+      {sourceOs && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 mb-4 text-sm">
+          This backup came from <strong>{sourceOs}</strong>. Reinstall the same edition —
+          a Windows license will not activate on a different edition.
+        </div>
+      )}
       {error && <ErrorBox message="Could not load the app inventory." detail={error} />}
       {notice && <div className="bg-brand-50 text-brand-700 rounded-lg p-3 mb-4 text-sm">{notice}</div>}
       <input

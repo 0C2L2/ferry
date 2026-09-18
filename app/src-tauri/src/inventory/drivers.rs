@@ -25,7 +25,7 @@ pub fn scan() -> Result<Vec<DriverEntry>> {
             });
         }
     }
-    drivers.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    drivers.sort_by_key(|a| a.name.to_lowercase());
     Ok(drivers)
 }
 
@@ -131,7 +131,7 @@ fn parse_driverquery() -> Result<Vec<DriverEntry>> {
 
 /// Minimal RFC-4180-style CSV line parser: honours double-quoted fields and
 /// escaped `""` quotes so commas inside names don't shift columns.
-fn parse_csv_line(line: &str) -> Vec<String> {
+pub(crate) fn parse_csv_line(line: &str) -> Vec<String> {
     let mut cols = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;

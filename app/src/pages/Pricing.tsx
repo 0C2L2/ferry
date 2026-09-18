@@ -11,7 +11,8 @@ const TIERS = [
 ];
 
 export function Pricing({ onAccount }: { onAccount: () => void }) {
-  const { account } = useAuth();
+  const { account, plannedTier, setPlannedTier } = useAuth();
+  const corporateChosen = plannedTier === "Corporate";
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -52,12 +53,35 @@ export function Pricing({ onAccount }: { onAccount: () => void }) {
             in the cloud — for USBs that are too small, or just extra safety.
           </div>
           <ul className="text-sm space-y-2">
-            {TIERS.map(t => (
-              <li key={t.size} className="flex justify-between border-b border-gray-100 py-1.5">
-                <span>{t.size}</span>
-                <span className="font-medium">{t.price}</span>
-              </li>
-            ))}
+            {TIERS.map(t => {
+              const chosen = plannedTier === t.size;
+              return (
+                <li key={t.size}>
+                  <button
+                    onClick={() => {
+                      if (!account) {
+                        onAccount();
+                        return;
+                      }
+                      setPlannedTier(chosen ? null : t.size);
+                    }}
+                    title={
+                      account
+                        ? "Save as your planned tier (no charge — Cloud Backup is not live yet)"
+                        : "Sign in to save a planned tier"
+                    }
+                    className={`w-full flex justify-between border-b border-gray-100 py-1.5 px-2 rounded transition ${
+                      chosen ? "bg-brand-50 border-brand-300" : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <span>
+                      {t.size} {chosen && <span className="text-brand-700 font-medium">✓ planned</span>}
+                    </span>
+                    <span className="font-medium">{t.price}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           <button
             disabled
@@ -80,9 +104,32 @@ export function Pricing({ onAccount }: { onAccount: () => void }) {
           Per-seat subscription with a migration dashboard — for teams that reinstall machines
           regularly. Pricing to be set with early business customers.
         </p>
-        <div className="mt-3 inline-block text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-600">
-          Coming later
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm px-3 py-1 rounded-full bg-gray-100 text-gray-600">
+            Coming later
+          </span>
+          <button
+            onClick={() => {
+              if (!account) {
+                onAccount();
+                return;
+              }
+              setPlannedTier(corporateChosen ? null : "Corporate");
+            }}
+            className={`text-sm px-4 py-1.5 rounded-lg border transition ${
+              corporateChosen
+                ? "border-brand-600 bg-brand-50 text-brand-700 font-medium"
+                : "border-gray-300 hover:border-brand-600"
+            }`}
+          >
+            {corporateChosen ? "✓ Corporate planned" : "Choose Corporate"}
+          </button>
         </div>
+        {corporateChosen && (
+          <p className="text-xs text-gray-500 mt-2">
+            Saved as your planned tier — no charge, no commitment.
+          </p>
+        )}
       </div>
 
       <p className="text-xs text-gray-500 text-center">

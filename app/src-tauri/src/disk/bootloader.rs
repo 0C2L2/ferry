@@ -8,12 +8,17 @@ use std::path::PathBuf;
 
 /// Tauri command: write the bundled UEFI bootloader to the FAT32 boot partition.
 /// `boot_partition_letter` is the drive letter of the newly created FAT32 partition.
+// Registered in the Tauri invoke handler (lib.rs); the allow silences the
+// dead-code lint that can't see macro-based registration.
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn write_bootloader(boot_partition_letter: String) -> Result<(), String> {
     install_bootloader(&boot_partition_letter)
         .map_err(|e| e.to_string())
 }
 
+// See the allow(dead_code) note on write_bootloader above.
+#[allow(dead_code)]
 fn install_bootloader(partition: &str) -> Result<()> {
     let letter = validate_drive_letter(partition)?;
     ensure_removable_drive_letter(letter)?;
