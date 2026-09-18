@@ -12,7 +12,7 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 2. **Downloads the OS** the user picks, always from the vendor's own official servers — never re-hosted or cached.
 3. **Writes one bootable USB** combining a small boot partition with a large data partition that holds both the OS image and the backup — the same two-partition trick tools like Ventoy and Rufus already use to get past the FAT32 4 GB file-size limit on modern OS images.
 4. **After the OS installs**, the user's files land in a `Restored/` folder on the new desktop, rebuilt from their original path — not silently placed back into OS folders, and never auto-injected into the new system.
-5. **Installed apps are never restored as binaries.** Instead, Ferry hands back a checklist of what was installed, with install buttons that lead to verified official sources — see [`app-reinstall-picker.md`](app-reinstall-picker.md).
+5. **Installed apps are never restored as binaries.** Instead, Ferry hands back a checklist of what was installed, with install buttons that lead to verified official sources — see [`app-reinstall-picker.md`](company/app-reinstall-picker.md).
 
 ## Design principles
 
@@ -23,14 +23,22 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 
 ## Docs in this repo
 
+### Company & product
+
 | File | Purpose |
 |---|---|
-| [`architecture.md`](architecture.md) | USB partition layout, backup/restore philosophy, cloud overflow |
-| [`app-reinstall-picker.md`](app-reinstall-picker.md) | Three-tier app detection and install system |
-| [`extensions.md`](extensions.md) | Feature ideas beyond MVP |
-| [`business-model.md`](business-model.md) | Monetization plan |
-| [`risks.md`](risks.md) | Guardrails and legal/licensing groundwork |
-| [`mvp.md`](mvp.md) | MVP scope, feature cuts, and ship checklist |
+| [`company/architecture.md`](company/architecture.md) | USB partition layout, backup/restore philosophy, cloud overflow |
+| [`company/app-reinstall-picker.md`](company/app-reinstall-picker.md) | Three-tier app detection and install system |
+| [`company/extensions.md`](company/extensions.md) | Feature ideas beyond MVP |
+| [`company/business-model.md`](company/business-model.md) | Monetization plan |
+| [`company/risks.md`](company/risks.md) | Guardrails and legal/licensing groundwork |
+| [`company/mvp.md`](company/mvp.md) | MVP scope, feature cuts, and ship checklist |
+
+### App & coding
+
+| File | Purpose |
+|---|---|
+| [`app/tech-plan.md`](app/tech-plan.md) | Technology stack, project structure, and phased coding plan |
 
 ## Name
 

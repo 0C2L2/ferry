@@ -1,0 +1,27 @@
+[
+  {
+    "id": "windows-11",
+    "label": "Windows 11",
+    "source_type": "microsoft_mct",
+    "url": null,
+    "checksum_url": null,
+    "approx_bytes": 5800000000
+  },
+  {
+    "id": "windows-10",
+    "label": "Windows 10",
+    "source_type": "microsoft_mct",
+    "url": null,
+    "checksum_url": null,
+    "approx_bytes": 5400000000
+  },
+  {
+    "id": "ubuntu-2404-lts",
+    "label": "Ubuntu 24.04 LTS",
+    "source_type": "direct_url",
+    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso",
+    "checksum_url": "https://releases.ubuntu.com/24.04/SHA256SUMS",
+    "approx_bytes": 6100000000
+  }
+]
+

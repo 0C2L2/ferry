@@ -1,0 +1,59 @@
+[package]
+name = "ferry"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ferry_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "ferry"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream", "json"] }
+
+sha2 = "0.10"
+hex = "0.4"
+
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+
+walkdir = "2"
+zip = "2"
+
+winreg = "0.52"
+windows = { version = "0.58", features = [
+  "Win32_Storage_FileSystem",
+  "Win32_System_Ioctl",
+  "Win32_Foundation",
+  "Win32_System_Registry",
+  "Win32_System_WindowsProgramming",
+] }
+
+tempfile = "3"
+zeroize = "1"
+
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
