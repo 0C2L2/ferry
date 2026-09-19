@@ -118,7 +118,17 @@ separate final step, extracted from the downloaded OS image itself (see
 
 ## 6. Known gaps (not testable yet)
 
-- No `assets/bootx64.efi`: bootloader step reports its absence honestly; USB is not yet bootable.
-- Windows MCT downloads unimplemented (manifest has no URLs); Ubuntu direct download only.
+- **Boot has never been verified.** The bootloader is extracted from the
+  downloaded ISO itself (no bundled binary), and the code is verified against
+  the real Ubuntu 24.04.2 ISO's layout — but no USB Ferry produced has been
+  booted on real firmware or in a UEFI VM yet. This is the biggest untested
+  risk in the project.
+- Ferry requires administrator rights (embedded manifest); `npm run tauri dev`
+  must be launched from an **elevated** terminal, or `cargo run` cannot spawn
+  the elevated binary.
+- Windows MCT downloads are a deliberate cut, not a bug; Ubuntu direct download
+  only. Windows entries appear greyed out in the OS picker.
 - Chromium `Login Data` won't decrypt post-reinstall (DPAPI); passwords need browser sync.
-- Cloud Backup, billing, and server auth do not exist; plan choice is a local preference.
+- Cloud Backup requires `assist-server` to be running with a B2 master key
+  configured (see `company/sponsor-integrations.md`); the AI-assist and
+  share-link features additionally need Nosana/Daytona/DNSimple credentials.

@@ -38,6 +38,7 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 | [`company/risks.md`](company/risks.md) | Guardrails and legal/licensing groundwork |
 | [`company/mvp.md`](company/mvp.md) | MVP scope, feature cuts, and ship checklist |
 | [`company/completion-plan.md`](company/completion-plan.md) | Phased plan to finish the MVP: decisions needed, blockers, and sequencing |
+| [`company/sponsor-integrations.md`](company/sponsor-integrations.md) | Nosana / Daytona / DNSimple integration plan, managed Cloud Backup, and what's still needed before it leaves a demo |
 
 ### App & coding
 

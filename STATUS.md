@@ -1,18 +1,41 @@
 # Ferry — Status Report
 
 **Date:** 2026-09-19 (updated) · **Version:** 0.1.0 (dev) · **Stack:** Tauri 2 + Rust + React 18 + Tailwind
-**Health:** `cargo test` 22/22 pass · `cargo clippy --locked -- -D warnings` clean · `tsc + vite build` clean · `npm audit --omit=dev` 0 vulns
+**Health:** `cargo test` 26/26 pass · `cargo clippy --locked -- -D warnings` clean · `tsc + vite build` clean · `npm audit --omit=dev` 0 vulns
 
-**2026-09-19 update:** erase/partition now runs immediately after drive
-selection (`PartitionUsb.tsx`), before backup/download write anything — the
-old order ran `diskpart clean` *after* backup and OS download had already
-written to the drive, which would have destroyed both. The bootloader is now
-extracted from the downloaded OS ISO itself (no bundled binary) as a final
-step (`BootloaderProgress.tsx`); see `company/completion-plan.md` Phase 1 for
-what was verified vs. what still needs a real boot test. Windows MCT is a
-deliberate cut for this build, not an unimplemented gap (Phase 2, resolved).
-Cloud Backup and everything else is free — no subscription tiers anywhere
-(`business-model.md`).
+**2026-09-19 update.** Two structural changes and four bugs found by actually
+running the thing on real hardware for the first time:
+
+*Structural:*
+- Erase/partition now runs immediately after drive selection
+  (`PartitionUsb.tsx`), before backup/download write anything. The old order
+  ran `diskpart clean` *after* backup and OS download had already written to
+  the drive, which would have destroyed both.
+- The bootloader is extracted from the downloaded OS ISO itself (no bundled
+  binary) as a final step (`BootloaderProgress.tsx`).
+- Cloud Backup is free and **Ferry-managed** — no user account, bucket, or key.
+  Verified end-to-end against the live B2 account (upload, byte-identical
+  download, delete). See `company/sponsor-integrations.md`.
+
+*Bugs found by running it (all fixed, all with tests):*
+1. **No elevation.** Ferry had no manifest requesting admin, so `diskpart`
+   was refused and a non-technical user would have had no way to know to
+   right-click → Run as administrator. Now embedded via `build.rs`.
+2. **32 MB boot partition couldn't be formatted FAT32** (minimum is ~33.5 MB —
+   Ventoy hits the same wall and uses FAT16 at that size). Now 100 MB.
+3. **`diskpart` failures were invisible** — it exits 0 even when commands in
+   the script fail, so a failed format read as success and surfaced later as a
+   confusing "could not find FERRY_BOOT". Its output is now scanned and
+   reported verbatim.
+4. **`UsbLayout` returned bare drive letters** (`"D"`) where every backup
+   command canonicalizes them as paths, producing "USB path does not exist: D".
+   Both drive-path spellings now go through one `safety::drive_root()` helper.
+
+*Still unresolved:* Windows MCT remains a deliberate cut (Phase 2). The
+bootloader still uses GRUB-loopback; measuring the real Ubuntu 24.04.2 ISO
+showed its largest file is 1.69 GB — comfortably under FAT32's 4 GB limit — so
+the simpler "extract ISO to a FAT32 partition" approach every USB writer uses
+would work and would delete most of that code. Decision pending.
 
 This report compares the working tree against every spec in the repo, records
 where reality diverges, and lists what to do next in priority order.
@@ -129,12 +152,15 @@ where reality diverges, and lists what to do next in priority order.
 5. CI (`.github/workflows/ci.yml`: cargo test + clippy gate, npm build + audit) added but **never run on a runner yet** — needs a first green runshot.
 
 ## 9. What to do next (priority order)
-1. **Boot-test the USB** on a spare machine or a UEFI VM (QEMU/VirtualBox + OVMF). This is now the single biggest remaining risk — the bootloader-from-ISO code is implemented and verified against the real ISO's structure, but no reboot has actually been attempted. *Needs you + hardware or a VM.*
-2. **Real end-to-end run** on a spare USB (test-plan §3 B/R/S cases), now that the erase/backup/download ordering is fixed. *Needs you + hardware.*
-3. **Portable Ferry.exe onto the USB** + offline-first restore (USB self-hosting checklist). *Needs a USB to verify.*
-4. **Phase 8**: EV code-signing, release pipeline beyond CI, `os-sources.json` update job. *Needs accounts, certificates, and budget.*
-5. Windows MCT download path — tracked as v0.2, not started (deliberately cut for this build).
-6. Cross-OS app-equivalent suggestions (picker nice-to-have, software-only, low priority).
+1. **Decide the bootloader approach** before spending another USB wipe on testing. The ISO's largest file is 1.69 GB, so FAT32's 4 GB limit — the entire justification for the GRUB-loopback machinery — doesn't bind. Switching to "extract ISO onto the FAT32 partition" (the Rufus/Etcher path) removes most of `disk/bootloader.rs` and puts booting on the most-tested code path in existence. Requires moving OS selection before partitioning so the boot partition can be sized to the ISO. *Product/engineering call.*
+2. **Boot-test the USB** on a spare machine or a UEFI VM (QEMU/VirtualBox + OVMF). Still the single biggest unverified risk: no USB Ferry produced has ever been booted. *Needs hardware or a VM.*
+3. **Finish the real end-to-end run** (test-plan §3 B/R/S cases). The run so far got through partition → OS select → plan → excludes → password → backup-start; the copy/verify/encrypt stages have not yet been exercised against real hardware. *Needs you + hardware.*
+4. **Live-test the sponsor integrations** — Nosana needs a funded wallet and a deployed job (slowest, do first), DNSimple needs its one-time wildcard cert, Daytona needs only a key. See `company/sponsor-integrations.md`. *Needs accounts/credentials.*
+5. **Add auth + rate limiting to `assist-server`** before it is reachable by anyone but you — `/api/cloud/upload-key` currently lets any caller store data at Ferry's expense.
+6. **Portable Ferry.exe onto the USB** + offline-first restore (USB self-hosting checklist). *Needs a USB to verify.*
+7. **Phase 8**: EV code-signing, release pipeline beyond CI, `os-sources.json` update job. *Needs accounts, certificates, and budget.*
+8. Windows MCT download path — tracked as v0.2, not started (deliberately cut for this build).
+9. Cross-OS app-equivalent suggestions (picker nice-to-have, software-only, low priority).
 
 ## 10. How to verify this report
 - `cargo test` in `app/src-tauri` → 22/22

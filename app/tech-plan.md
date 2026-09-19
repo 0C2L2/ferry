@@ -63,79 +63,102 @@ Electron is ruled out: its binary size (150+ MB) makes the "portable exe on USB"
 
 ```
 ferry/
-├── src-tauri/                  # Rust backend
-│   ├── Cargo.toml
-│   ├── tauri.conf.json
+├── app/
+│   ├── src-tauri/                  # Rust backend
+│   │   ├── Cargo.toml
+│   │   ├── build.rs                # Embeds the requireAdministrator manifest
+│   │   ├── tauri.conf.json
+│   │   ├── windows-app-manifest.xml# UAC elevation (diskpart needs admin)
+│   │   └── src/
+│   │       ├── main.rs             # Thin entry point; calls ferry_lib::run()
+│   │       ├── lib.rs              # Tauri builder + command registry
+│   │       ├── safety.rs           # Trust boundary: path/letter/filename validation
+│   │       ├── types.rs            # Shared serde types (DriveInfo, UsbLayout, Manifest…)
+│   │       ├── disk/
+│   │       │   ├── enumerate.rs    # List removable drives (model, size, free space)
+│   │       │   ├── partition.rs    # FAT32 boot + exFAT data via diskpart
+│   │       │   └── bootloader.rs   # Extract boot files from the downloaded ISO
+│   │       ├── backup/
+│   │       │   ├── scan.rs         # Walk selected roots, apply excludes
+│   │       │   ├── paths.rs        # Migration profile: measure folders, OS matrix
+│   │       │   ├── copy.rs         # Chunked copy to USB
+│   │       │   └── checksum.rs     # SHA-256 manifest + verify
+│   │       ├── crypto/
+│   │       │   ├── keygen.rs       # Argon2id key derivation
+│   │       │   ├── stream.rs       # Chunked AES-256-GCM container
+│   │       │   ├── encrypt.rs      # Backup/ → Backup.enc (+ backup.salt)
+│   │       │   └── decrypt.rs      # Backup.enc → staging Backup/
+│   │       ├── download/
+│   │       │   ├── sources.rs      # os-sources.json manifest resolution
+│   │       │   └── fetch.rs        # Resumable download + checksum verify
+│   │       ├── inventory/
+│   │       │   ├── apps.rs         # Registry uninstall keys
+│   │       │   ├── store.rs        # Get-AppxPackage (Store apps)
+│   │       │   ├── drivers.rs      # driverquery + pnputil
+│   │       │   ├── picker.rs       # Three-tier resolution + winget install
+│   │       │   └── save.rs         # apps.json / drivers.json read+write
+│   │       ├── browser/
+│   │       │   ├── chrome.rs       # Chromium-family profiles (all profiles)
+│   │       │   └── firefox.rs      # places.sqlite + logins.json + key4.db
+│   │       ├── wifi/
+│   │       │   ├── export.rs       # netsh wlan export profile
+│   │       │   └── import.rs       # netsh wlan add profile (at restore)
+│   │       ├── cloud/
+│   │       │   ├── b2.rs           # Managed B2 upload/download/delete
+│   │       │   └── progress.rs     # Cloud progress event payload
+│   │       └── restore/
+│   │           ├── detect.rs       # Find Backup.enc on a removable drive
+│   │           └── copy.rs         # Verify → copy to Restored/ + summary
+│   │
+│   ├── src/                        # React frontend
+│   │   ├── main.tsx
+│   │   ├── App.tsx                 # Wizard step machine + sidebar nav
+│   │   ├── api.ts                  # Typed wrappers: Tauri commands + assist-server
+│   │   ├── types.ts                # Shapes mirroring the Rust serde output
+│   │   ├── auth.tsx                # Optional local-only profile
+│   │   ├── history.ts             # Local backup/restore journal
+│   │   ├── pages/
+│   │   │   ├── Welcome.tsx         # First-run onboarding, Windows license note
+│   │   │   ├── DriveSelect.tsx     # USB drive picker (model, size, free space)
+│   │   │   ├── PartitionUsb.tsx    # Erase confirmation + partition (runs FIRST)
+│   │   │   ├── OSSelect.tsx        # OS picker (Ubuntu; Windows greyed out)
+│   │   │   ├── MigrationPlan.tsx   # Folder selection sized by source→target OS
+│   │   │   ├── ExcludeReview.tsx   # Review/modify the backup exclude list
+│   │   │   ├── PasswordSetup.tsx   # Encryption password + write-it-down gate
+│   │   │   ├── BackupProgress.tsx  # copy → browser → Wi-Fi → inventory → verify → encrypt
+│   │   │   ├── CloudUpload.tsx     # Optional free managed cloud backup
+│   │   │   ├── DownloadProgress.tsx# OS download + checksum
+│   │   │   ├── BootloaderProgress.tsx # Install boot files from the ISO
+│   │   │   ├── Done.tsx            # "Remove USB and boot from it" instructions
+│   │   │   ├── RestoreDetect.tsx   # Detect USB backup, or restore from cloud
+│   │   │   ├── RestoreProgress.tsx # decrypt → verify → copy → Wi-Fi
+│   │   │   ├── AppPicker.tsx       # App + driver reinstall checklist (+ AI assist)
+│   │   │   ├── Pricing.tsx         # Everything is free
+│   │   │   ├── Faq.tsx
+│   │   │   ├── Account.tsx         # Profile / History / Settings tabs
+│   │   │   ├── MyFiles.tsx         # Backup/restore history
+│   │   │   └── Settings.tsx
+│   │   ├── components/
+│   │   │   ├── ProgressBar.tsx     # ProgressBar + StageList
+│   │   │   └── ErrorBox.tsx        # Plain message + collapsible technical detail
+│   │   └── hooks/
+│   │       └── useTauriProgress.ts # Subscribe to Tauri progress events
+│   │
+│   ├── os-sources.json             # Data-driven OS source manifest
+│   ├── tech-plan.md                # This document
+│   ├── test-plan.md                # Manual test cases
+│   └── migration-scan-plan.md      # Migration-aware scanning design
+│
+├── assist-server/                  # Optional Node sidecar (see company/sponsor-integrations.md)
 │   └── src/
-│       ├── main.rs             # Tauri app entry point, command registry
-│       ├── disk/
-│       │   ├── mod.rs
-│       │   ├── enumerate.rs    # List removable drives (model, size, free space)
-│       │   ├── partition.rs    # Create FAT32 boot + exFAT data partitions
-│       │   └── bootloader.rs   # Write UEFI bootloader to boot partition
-│       ├── backup/
-│       │   ├── mod.rs
-│       │   ├── scan.rs         # Walk C:\Users\<name>\, build file list + exclude list
-│       │   ├── copy.rs         # Stream files to USB Backup/ folder
-│       │   ├── checksum.rs     # SHA-256 per file, write manifest.json
-│       │   └── verify.rs       # Re-read and compare checksums
-│       ├── encrypt/
-│       │   ├── mod.rs
-│       │   ├── keygen.rs       # Argon2 password → AES-256 key
-│       │   ├── encrypt.rs      # Encrypt Backup/ → Backup.enc, delete plaintext
-│       │   └── decrypt.rs      # Decrypt Backup.enc into memory for restore
-│       ├── download/
-│       │   ├── mod.rs
-│       │   ├── sources.rs      # OS source manifest (versioned JSON, data-driven)
-│       │   ├── fetch.rs        # Resumable HTTP download, progress events
-│       │   └── verify.rs       # Checksum downloaded ISO, delete on failure
-│       ├── inventory/
-│       │   ├── mod.rs
-│       │   ├── apps.rs         # Registry scan → apps.json
-│       │   ├── drivers.rs      # driverquery + pnputil → drivers.json
-│       │   └── picker.rs       # Winget catalog lookup, tier resolution
-│       ├── browser/
-│       │   ├── mod.rs
-│       │   ├── chrome.rs       # Locate + copy Bookmarks + Login Data (Chrome/Edge/Brave)
-│       │   └── firefox.rs      # Locate + copy places.sqlite + logins.json
-│       ├── wifi/
-│       │   ├── mod.rs
-│       │   ├── export.rs       # netsh wlan export profile
-│       │   └── import.rs       # netsh wlan add profile (at restore)
-│       └── restore/
-│           ├── mod.rs
-│           ├── detect.rs       # Find Backup.enc on USB automatically
-│           ├── copy.rs         # Decrypt → verify → copy to Restored/ on desktop
-│           └── summary.rs      # Build restore summary report
+│       ├── index.ts                # Express routes
+│       └── services/
+│           ├── b2admin.ts          # Mints scoped, disposable B2 keys
+│           ├── nosana.ts           # Decentralized LLM inference
+│           ├── daytona.ts          # Sandboxed command verification
+│           └── dnsimple.ts         # Share-link subdomain provisioning
 │
-├── src/                        # React frontend
-│   ├── main.tsx
-│   ├── App.tsx                 # Router + step flow
-│   ├── pages/
-│   │   ├── Welcome.tsx         # First-run onboarding, Windows license note
-│   │   ├── DriveSelect.tsx     # USB drive picker (model, size, free space)
-│   │   ├── OSSelect.tsx        # OS picker (Win 11, Win 10, Ubuntu)
-│   │   ├── ExcludeReview.tsx   # Review/modify the backup exclude list
-│   │   ├── PasswordSetup.tsx   # Set encryption password (with confirmation + warning)
-│   │   ├── BackupProgress.tsx  # Live progress: scan → copy → verify → encrypt
-│   │   ├── DownloadProgress.tsx# Live progress: OS download + checksum
-│   │   ├── WriteProgress.tsx   # Live progress: partition + bootloader + write
-│   │   ├── Done.tsx            # "Remove USB and boot from it" instructions
-│   │   ├── RestoreDetect.tsx   # Auto-detect Backup.enc, password prompt
-│   │   ├── RestoreProgress.tsx # Live progress: decrypt → verify → copy → Wi-Fi
-│   │   └── AppPicker.tsx       # App + driver reinstall checklist
-│   ├── components/
-│   │   ├── DriveCard.tsx
-│   │   ├── ProgressBar.tsx
-│   │   ├── ChecklistRow.tsx    # Tier-aware row (Tier 1 button / Tier 2 link / Tier 3 grey)
-│   │   ├── PasswordInput.tsx
-│   │   └── SummaryPanel.tsx
-│   └── hooks/
-│       ├── useTauriProgress.ts # Subscribe to Tauri progress events
-│       └── useDrives.ts
-│
-├── os-sources.json             # Data-driven OS source manifest (version, URL, checksum URL)
-├── package.json
+├── company/                        # Product & planning docs
 └── README.md
 ```
 
@@ -311,14 +334,17 @@ Build screens in the order the user experiences them. Each screen is a React com
 |---|---|
 | `Welcome.tsx` | Windows licence note, "this app needs admin access" explanation |
 | `DriveSelect.tsx` | List removable drives only; show model + size; block system drives at API level |
+| `PartitionUsb.tsx` | Erase confirmation + partition/format. Runs immediately after drive selection, before anything is written |
 | `OSSelect.tsx` | Card per OS with logo; show required USB space |
+| `MigrationPlan.tsx` | Folder picker sized per folder, recommendations driven by source→target OS |
 | `ExcludeReview.tsx` | Show default exclude list; toggle items; add custom paths |
 | `PasswordSetup.tsx` | Password + confirm field; strength indicator; "write this down" warning; must re-type confirmation phrase |
-| `BackupProgress.tsx` | Four-stage progress bar: scan → copy → verify → encrypt; live file count and speed |
+| `BackupProgress.tsx` | Six-stage progress: copy → browser → Wi-Fi → inventory → verify → encrypt; live file count and elapsed clock |
+| `CloudUpload.tsx` | Optional free managed cloud backup; returns a backup ID to write down |
 | `DownloadProgress.tsx` | Download progress with speed + ETA; checksum verify step shown |
-| `WriteProgress.tsx` | Partition + write + bootloader steps; estimated time |
+| `BootloaderProgress.tsx` | Install boot files extracted from the downloaded ISO; failure is a warning, not a dead end |
 | `Done.tsx` | Clear "safe to remove USB" + boot instructions with screenshots |
-| `RestoreDetect.tsx` | Auto-detect USB with Backup.enc; password prompt |
+| `RestoreDetect.tsx` | Auto-detect USB with Backup.enc, or restore from cloud by backup ID; password prompt |
 | `RestoreProgress.tsx` | Decrypt → verify → copy → Wi-Fi reimport; live count |
 | `AppPicker.tsx` | Grouped checklist; tier badges; Install / Get from site / No match states |
 
