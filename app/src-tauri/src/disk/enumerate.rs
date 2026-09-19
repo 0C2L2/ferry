@@ -3,9 +3,12 @@
 /// intentionally excluded at the API level, not just in the UI.
 use crate::types::DriveInfo;
 use anyhow::Result;
+// DRIVE_REMOVABLE lives in Win32_Storage_FileSystem in windows-rs 0.58.
 use windows::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetDriveTypeW};
-use windows::Win32::System::WindowsProgramming::DRIVE_REMOVABLE;
 use windows::core::PCWSTR;
+
+/// Win32 DRIVE_REMOVABLE (= 2). Not re-exported as a typed symbol in windows-rs 0.58.
+const DRIVE_REMOVABLE: u32 = 2;
 
 /// Tauri command: returns list of removable drives with model, total, and free bytes.
 #[tauri::command]
@@ -16,7 +19,6 @@ pub async fn list_removable_drives() -> Result<Vec<DriveInfo>, String> {
 fn enumerate_drives() -> Result<Vec<DriveInfo>> {
     let mut drives = Vec::new();
 
-    // Check every possible drive letter A–Z.
     for letter in b'A'..=b'Z' {
         let drive = format!("{}:\\", letter as char);
         let drive_w: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
@@ -62,10 +64,17 @@ fn enumerate_drives() -> Result<Vec<DriveInfo>> {
 /// Use WMI via PowerShell to get the friendly model name for a drive letter.
 /// Falls back to "USB Drive" if WMI is unavailable.
 fn get_drive_model(drive_letter: &str) -> Result<String> {
-    let letter = drive_letter.trim_end_matches('\\');
+    // drive_letter is already validated to be a single letter + ":\" — safe to embed.
+    let letter = drive_letter
+        .trim_end_matches('\\')
+        .trim_end_matches(':');
+    // Use Get-PhysicalDisk which is more reliable than Win32_DiskDrive + partition join.
     let script = format!(
-        "Get-WmiObject Win32_DiskDrive | Where-Object {{ $_.DeviceID -match (Get-Partition | Where-Object DriveLetter -eq '{}').DiskNumber }} | Select-Object -ExpandProperty Model",
-        letter.trim_end_matches(':')
+        "try {{ \
+            $dl = '{letter}'; \
+            $diskNum = (Get-Partition -DriveLetter $dl -ErrorAction Stop).DiskNumber; \
+            (Get-Disk -Number $diskNum -ErrorAction Stop).FriendlyName \
+        }} catch {{ 'USB Drive' }}"
     );
 
     let output = std::process::Command::new("powershell")
@@ -79,4 +88,3 @@ fn get_drive_model(drive_letter: &str) -> Result<String> {
         Ok(model)
     }
 }
-

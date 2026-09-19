@@ -6,8 +6,11 @@
 use anyhow::{bail, Context, Result};
 use std::path::{Component, Path, PathBuf};
 use windows::Win32::Storage::FileSystem::GetDriveTypeW;
-use windows::Win32::System::WindowsProgramming::DRIVE_REMOVABLE;
 use windows::core::PCWSTR;
+
+/// Win32 DRIVE_REMOVABLE constant (value 2). Not re-exported as a typed
+/// symbol in windows-rs 0.58, so we define it here.
+const DRIVE_REMOVABLE: u32 = 2;
 
 /// Accept `E`, `E:`, `E:\` (any case) and return the uppercase drive letter.
 pub fn validate_drive_letter(input: &str) -> Result<char> {

@@ -2,8 +2,10 @@
 use anyhow::Result;
 use serde::Serialize;
 use windows::Win32::Storage::FileSystem::GetDriveTypeW;
-use windows::Win32::System::WindowsProgramming::DRIVE_REMOVABLE;
 use windows::core::PCWSTR;
+
+/// Win32 DRIVE_REMOVABLE (= 2). Not re-exported as a typed symbol in windows-rs 0.58.
+const DRIVE_REMOVABLE: u32 = 2;
 
 #[derive(Debug, Serialize)]
 pub struct BackupLocation {
@@ -24,6 +26,7 @@ fn find() -> Result<Option<BackupLocation>> {
         let drive = format!("{}:\\", letter as char);
         let drive_w: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
 
+        // Safety: drive_w is a valid null-terminated wide string.
         let drive_type = unsafe { GetDriveTypeW(PCWSTR(drive_w.as_ptr())) };
         if drive_type != DRIVE_REMOVABLE {
             continue;
@@ -42,4 +45,3 @@ fn find() -> Result<Option<BackupLocation>> {
     }
     Ok(None)
 }
-

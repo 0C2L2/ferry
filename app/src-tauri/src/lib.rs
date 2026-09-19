@@ -13,6 +13,7 @@ mod inventory;
 mod browser;
 mod wifi;
 mod restore;
+mod cloud;
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -47,6 +48,8 @@ pub fn run() {
             disk::bootloader::write_bootloader,
             // ── Backup ────────────────────────────────────────────────────
             backup::scan::scan_user_files,
+            backup::scan::list_usb_backup_files,
+            backup::paths::migration_profile,
             backup::copy::copy_files_to_usb,
             backup::checksum::verify_backup,
             backup::checksum::read_manifest,
@@ -73,6 +76,8 @@ pub fn run() {
             // ── Restore ───────────────────────────────────────────────────
             restore::detect::find_backup_on_usb,
             restore::copy::restore_files,
+            // ── Cloud Backup ──────────────────────────────────────────────
+            cloud::b2::upload_backup_b2,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ferry");

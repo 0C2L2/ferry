@@ -1,5 +1,6 @@
 /// SHA-256 checksum every file in Backup/, write manifest.json, and verify.
 /// The manifest is the gate that must pass before the erase step is unlocked.
+use crate::backup::copy::copy_file_chunked;
 use crate::backup::scan::FileToBackup;
 use crate::safety::{
     ensure_inside, ensure_source_under_home, sanitize_relative_path, validate_usb_root,
@@ -83,27 +84,9 @@ async fn build_and_verify_manifest(
             continue;
         }
 
-        match hash_file(&backup_path) {
-            Ok(hash) => {
-                // Also hash the source to confirm it hasn't changed since copy.
-                let source_hash = hash_file(&source).unwrap_or_default();
-                if hash != source_hash {
-                    failures.push(format!(
-                        "Checksum mismatch: {} (source and backup differ)",
-                        file.source.display()
-                    ));
-                } else {
-                    entries.push(ManifestEntry {
-                        original_path: source.to_string_lossy().to_string(),
-                        backup_path: relative.to_string_lossy().replace('\\', "/"),
-                        size_bytes: file.size_bytes,
-                        sha256: hash,
-                    });
-                }
-            }
-            Err(e) => {
-                failures.push(format!("{}: {}", file.source.display(), e));
-            }
+        match verify_one(&source, &backup_path, file.size_bytes, &relative) {
+            Ok(entry) => entries.push(entry),
+            Err(failure) => failures.push(failure),
         }
 
         let _ = app.emit("backup:progress", serde_json::json!({
@@ -117,7 +100,20 @@ async fn build_and_verify_manifest(
     }
 
     if !failures.is_empty() {
-        bail!("Verification failed for {} file(s):\n{}", failures.len(), failures.join("\n"));
+        let shown: Vec<&String> = failures.iter().take(10).collect();
+        let mut msg = format!(
+            "Verification failed for {} file(s):\n{}",
+            failures.len(),
+            shown
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        if failures.len() > 10 {
+            msg.push_str(&format!("\n…and {} more", failures.len() - 10));
+        }
+        bail!("{}", msg);
     }
 
     let source_user = std::env::var("USERNAME").unwrap_or_else(|_| "User".to_string());
@@ -151,7 +147,55 @@ async fn build_and_verify_manifest(
     Ok(manifest)
 }
 
-pub fn hash_file(path: &PathBuf) -> Result<String> {
+/// Verify one file: both copies readable and identical.
+/// Files that change mid-backup (browser databases, active downloads) get one
+/// re-copy + re-check before being declared failures — transient writes heal,
+/// only persistently-changing files block the backup.
+fn verify_one(
+    source: &std::path::Path,
+    backup_path: &std::path::Path,
+    size_bytes: u64,
+    relative: &std::path::Path,
+) -> Result<ManifestEntry, String> {
+    if let Some(hash) = check_pair(source, backup_path) {
+        return Ok(entry_for(source, relative, size_bytes, hash));
+    }
+    copy_file_chunked(source, backup_path)
+        .map_err(|e| format!("Cannot re-copy {}: {}", source.display(), e))?;
+    check_pair(source, backup_path)
+        .map(|hash| entry_for(source, relative, size_bytes, hash))
+        .ok_or_else(|| {
+            format!(
+                "{} changed during backup and could not be captured consistently. \
+                 Close programs using it and run backup again.",
+                source.display()
+            )
+        })
+}
+
+/// Hash both sides; Some(hash) only if readable and equal.
+fn check_pair(source: &std::path::Path, backup_path: &std::path::Path) -> Option<String> {
+    match (hash_file(source), hash_file(backup_path)) {
+        (Ok(a), Ok(b)) if a == b => Some(a),
+        _ => None,
+    }
+}
+
+fn entry_for(
+    source: &std::path::Path,
+    relative: &std::path::Path,
+    size_bytes: u64,
+    hash: String,
+) -> ManifestEntry {
+    ManifestEntry {
+        original_path: source.to_string_lossy().to_string(),
+        backup_path: relative.to_string_lossy().replace('\\', "/"),
+        size_bytes,
+        sha256: hash,
+    }
+}
+
+pub fn hash_file(path: &std::path::Path) -> Result<String> {
     let mut file = std::fs::File::open(path)
         .with_context(|| format!("Cannot open for hashing: {:?}", path))?;
     let mut hasher = Sha256::new();
@@ -164,7 +208,7 @@ pub fn hash_file(path: &PathBuf) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-fn get_os_version() -> String {
+pub(crate) fn get_os_version() -> String {
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-Command",
             "(Get-WmiObject Win32_OperatingSystem).Caption"])

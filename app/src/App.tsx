@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./auth";
 import { Welcome } from "./pages/Welcome";
 import { DriveSelect } from "./pages/DriveSelect";
 import { OSSelect } from "./pages/OSSelect";
+import { MigrationPlan } from "./pages/MigrationPlan";
 import { ExcludeReview } from "./pages/ExcludeReview";
 import { PasswordSetup } from "./pages/PasswordSetup";
 import { BackupProgress } from "./pages/BackupProgress";
@@ -16,6 +17,7 @@ import { AppPicker } from "./pages/AppPicker";
 import { Pricing } from "./pages/Pricing";
 import { Faq } from "./pages/Faq";
 import { Account, type AccountTab } from "./pages/Account";
+import { CloudUpload } from "./pages/CloudUpload";
 import { recordBackup, recordRestore } from "./history";
 import type {
   BackupLocation,
@@ -30,9 +32,11 @@ type Step =
   | "welcome"
   | "drives"
   | "os"
+  | "plan"
   | "excludes"
   | "password"
   | "backup"
+  | "cloud"
   | "download"
   | "write"
   | "done"
@@ -43,7 +47,8 @@ type Step =
 const BACKUP_BACK: Partial<Record<Step, Step>> = {
   drives: "welcome",
   os: "drives",
-  excludes: "os",
+  plan: "os",
+  excludes: "plan",
   password: "excludes",
 };
 
@@ -66,6 +71,7 @@ function Shell() {
   const [os, setOs] = useState<OsSource | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [excludes, setExcludes] = useState<string[]>([]);
+  const [roots, setRoots] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [bootloaderWarning, setBootloaderWarning] = useState<string | null>(null);
@@ -80,6 +86,7 @@ function Shell() {
     setOs(null);
     setScan(null);
     setExcludes([]);
+    setRoots([]);
     setPassword("");
     setManifest(null);
     setBootloaderWarning(null);
@@ -189,12 +196,24 @@ function Shell() {
           <DriveSelect selected={drive} onSelect={setDrive} onNext={() => setStep("os")} />
         )}
         {view === "wizard" && step === "os" && (
-          <OSSelect selected={os} onSelect={setOs} onNext={() => setStep("excludes")} />
+          <OSSelect selected={os} onSelect={setOs} onNext={() => setStep("plan")} />
+        )}
+        {view === "wizard" && step === "plan" && os && (
+          <MigrationPlan
+            os={os}
+            onDone={r => {
+              setRoots(r);
+              setScan(null);
+              setExcludes([]);
+              setStep("excludes");
+            }}
+          />
         )}
         {view === "wizard" && step === "excludes" && (
           <ExcludeReview
             scan={scan}
             extraExcludes={excludes}
+            roots={roots}
             onScan={(s, e) => {
               setScan(s);
               setExcludes(e);
@@ -227,8 +246,15 @@ function Shell() {
                   bytes: m.files.reduce((sum, f) => sum + f.size_bytes, 0),
                 });
               }
-              setStep("download");
+              setStep("cloud"); // offer Extra Careful cloud upload first
             }}
+          />
+        )}
+        {step === "cloud" && drive && (
+          <CloudUpload
+            drive={drive}
+            onDone={() => setStep("download")}
+            onSkip={() => setStep("download")}
           />
         )}
         {step === "download" && drive && os && (

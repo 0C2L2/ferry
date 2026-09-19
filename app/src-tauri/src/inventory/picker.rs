@@ -5,13 +5,15 @@
 use crate::safety::is_http_url;
 use crate::types::AppEntry;
 use anyhow::Result;
+use tauri::{AppHandle, Emitter};
 
 /// Tauri command: take a list of apps (from apps.rs) and resolve tiers.
 #[tauri::command]
 pub async fn resolve_app_tiers(
+    app: AppHandle,
     mut apps: Vec<AppEntry>,
 ) -> Result<Vec<AppEntry>, String> {
-    resolve(&mut apps).await.map_err(|e| e.to_string())?;
+    resolve(&app, &mut apps).await.map_err(|e| e.to_string())?;
     Ok(apps)
 }
 
@@ -59,23 +61,32 @@ async fn install(winget_id: &str) -> Result<String> {
     }
 }
 
-async fn resolve(apps: &mut [AppEntry]) -> Result<()> {
+async fn resolve(app: &AppHandle, apps: &mut [AppEntry]) -> Result<()> {
     let curated = load_curated_table();
-    for app in apps.iter_mut() {
-        if let Some(winget_id) = winget_lookup(&app.name).await {
-            app.tier = 1;
-            app.winget_id = Some(winget_id);
-        } else if let Some(url) = curated_lookup(&curated, &app.name) {
+    let total = apps.len() as u64;
+    for (i, app_entry) in apps.iter_mut().enumerate() {
+        // Heartbeat for the UI: winget lookups are slow (seconds per app),
+        // so report each one — otherwise the stage looks hung.
+        let _ = app.emit("backup:progress", serde_json::json!({
+            "stage": "inventory",
+            "current": i as u64 + 1,
+            "total": total,
+            "current_item": app_entry.name,
+        }));
+        if let Some(winget_id) = winget_lookup(&app_entry.name).await {
+            app_entry.tier = 1;
+            app_entry.winget_id = Some(winget_id);
+        } else if let Some(url) = curated_lookup(&curated, &app_entry.name) {
             // Human-verified vendor homepage from the bundled curated table.
             // Still shown as an unverified vendor-site link in the UI.
-            app.tier = 2;
-            if !app.url_info.as_deref().is_some_and(is_http_url) {
-                app.url_info = Some(url);
+            app_entry.tier = 2;
+            if !app_entry.url_info.as_deref().is_some_and(is_http_url) {
+                app_entry.url_info = Some(url);
             }
-        } else if app.url_info.as_deref().is_some_and(is_http_url) {
-            app.tier = 2;
+        } else if app_entry.url_info.as_deref().is_some_and(is_http_url) {
+            app_entry.tier = 2;
         } else {
-            app.tier = 3;
+            app_entry.tier = 3;
         }
     }
     Ok(())

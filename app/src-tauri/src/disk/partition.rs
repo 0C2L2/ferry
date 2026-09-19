@@ -10,7 +10,6 @@ use crate::AppState;
 use anyhow::{bail, Context, Result};
 use std::io::Write;
 use tauri::State;
-use tempfile::NamedTempFile;
 
 /// Tauri command: partition the given drive letter and format both partitions.
 /// `drive_letter` must be a removable drive (e.g. "E:").
@@ -56,11 +55,6 @@ async fn partition_drive(letter: char) -> Result<()> {
         get_disk_number(letter).context("Could not determine disk number for drive letter")?;
     ensure_removable_drive_letter(letter)?;
 
-    // Build a diskpart script that:
-    //   1. Selects the disk by number.
-    //   2. Cleans it (all partitions removed).
-    //   3. Creates a 32 MB FAT32 primary partition (boot).
-    //   4. Creates the remainder as an exFAT primary partition (data).
     let script = format!(
         "select disk {disk}\n\
          clean\n\
@@ -80,7 +74,7 @@ async fn partition_drive(letter: char) -> Result<()> {
 }
 
 fn get_disk_number(letter: char) -> Result<u32> {
-    let script = format!("(Get-Partition -DriveLetter '{letter}').DiskNumber",);
+    let script = format!("(Get-Partition -DriveLetter '{letter}').DiskNumber");
     let output = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
@@ -93,19 +87,42 @@ fn get_disk_number(letter: char) -> Result<u32> {
 }
 
 fn run_diskpart_script(script: &str) -> Result<()> {
-    let mut tmp = NamedTempFile::new().context("Could not create temp file for diskpart script")?;
-    tmp.write_all(script.as_bytes()).context("Could not write diskpart script")?;
-    let path = tmp.path().to_owned();
+    // Write the script to a temp file and close the handle BEFORE launching diskpart.
+    // On Windows, diskpart cannot read a file that another process (us) still has open.
+    let script_path = {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "ferry-diskpart-{}.txt",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        ));
+        {
+            // File handle is dropped at the end of this inner block.
+            let mut f = std::fs::File::create(&path)
+                .context("Could not create diskpart script file")?;
+            f.write_all(script.as_bytes())
+                .context("Could not write diskpart script")?;
+            f.flush().context("Could not flush diskpart script")?;
+            // f is dropped here — handle closed, lock released.
+        }
+        path
+    };
 
-    let output = std::process::Command::new("diskpart")
-        .args(["/s", path.to_str().context("Invalid diskpart script path")?])
+    let result = std::process::Command::new("diskpart")
+        .args(["/s", script_path.to_str().context("Invalid diskpart script path")?])
         .output()
-        .context("Failed to run diskpart")?;
+        .context("Failed to run diskpart");
 
+    // Always remove the temp script even if diskpart failed.
+    let _ = std::fs::remove_file(&script_path);
+
+    let output = result?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("diskpart exited with error: {}", stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        bail!("diskpart exited with error: {} {}", stdout.trim(), stderr.trim());
     }
     Ok(())
 }
-

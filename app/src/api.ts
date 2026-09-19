@@ -8,6 +8,7 @@ import type {
   DriverEntry,
   FileToBackup,
   Manifest,
+  MigrationProfile,
   OsSource,
   RestoreSummary,
   ScanResult,
@@ -16,8 +17,12 @@ import type {
 export const api = {
   listDrives: () => invoke<DriveInfo[]>("list_removable_drives"),
   listOsSources: () => invoke<OsSource[]>("list_os_sources"),
-  scanFiles: (extraExcludes: string[]) =>
-    invoke<ScanResult>("scan_user_files", { extraExcludes }),
+  scanFiles: (extraExcludes: string[], roots: string[]) =>
+    invoke<ScanResult>("scan_user_files", { extraExcludes, roots }),
+  listUsbFiles: (usbRoot: string) =>
+    invoke<FileToBackup[]>("list_usb_backup_files", { usbRoot }),
+  migrationProfile: (targetId: string) =>
+    invoke<MigrationProfile>("migration_profile", { targetId }),
   copyFiles: (files: FileToBackup[], usbRoot: string) =>
     invoke<void>("copy_files_to_usb", { files, usbRoot }),
   verifyBackup: (files: FileToBackup[], usbRoot: string, skipped: [string, string][]) =>
@@ -51,4 +56,11 @@ export const api = {
     invoke<RestoreSummary>("restore_files", { backupDir }),
   importWifi: (backupRoot: string) =>
     invoke<[number, number]>("import_wifi_profiles", { backupRoot }),
+  uploadBackupB2: (
+    usbRoot: string,
+    keyId: string,
+    appKey: string,
+    bucketName: string,
+  ) =>
+    invoke<string>("upload_backup_b2", { usbRoot, keyId, appKey, bucketName }),
 };

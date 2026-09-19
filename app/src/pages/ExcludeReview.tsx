@@ -6,11 +6,12 @@ import { ErrorBox } from "../components/ErrorBox";
 interface Props {
   scan: ScanResult | null;
   extraExcludes: string[];
+  roots: string[];
   onScan: (scan: ScanResult, extraExcludes: string[]) => void;
   onNext: () => void;
 }
 
-export function ExcludeReview({ scan, extraExcludes, onScan, onNext }: Props) {
+export function ExcludeReview({ scan, extraExcludes, roots, onScan, onNext }: Props) {
   const [loading, setLoading] = useState(!scan);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -20,7 +21,7 @@ export function ExcludeReview({ scan, extraExcludes, onScan, onNext }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.scanFiles(excludes);
+      const result = await api.scanFiles(excludes, roots);
       onScan(result, excludes);
     } catch (err) {
       setError(String(err));
@@ -38,7 +39,8 @@ export function ExcludeReview({ scan, extraExcludes, onScan, onNext }: Props) {
     <div className="max-w-2xl mx-auto">
       <h2 className="text-xl font-semibold mb-1">Review what gets backed up</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Your whole user folder is included. OS caches and temp files are skipped by default.
+        Only your selected folders are scanned — everything else on this PC is left alone.
+        OS caches and temp files inside them are skipped by default.
       </p>
       {error && <ErrorBox message="Backup scan failed." detail={error} />}
       {loading || !scan ? (

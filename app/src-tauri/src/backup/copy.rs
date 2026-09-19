@@ -64,7 +64,7 @@ async fn copy_files(
 }
 
 /// Copy a single file in 1 MB chunks.
-fn copy_file_chunked(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+pub(crate) fn copy_file_chunked(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
     let mut src_file = std::fs::File::open(src)
         .with_context(|| format!("Cannot open source file: {:?}", src))?;
     let mut dst_file = std::fs::File::create(dst)

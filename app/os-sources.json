@@ -17,11 +17,18 @@
   },
   {
     "id": "ubuntu-2404-lts",
-    "label": "Ubuntu 24.04 LTS",
+    "label": "Ubuntu 24.04.2 LTS",
     "source_type": "direct_url",
-    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso",
-    "checksum_url": "https://releases.ubuntu.com/24.04/SHA256SUMS",
-    "approx_bytes": 6100000000
+    "url": "https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso",
+    "checksum_url": "https://releases.ubuntu.com/24.04.2/SHA256SUMS",
+    "approx_bytes": 6114000000
+  },
+  {
+    "id": "ubuntu-2204-lts",
+    "label": "Ubuntu 22.04.5 LTS",
+    "source_type": "direct_url",
+    "url": "https://releases.ubuntu.com/22.04.5/ubuntu-22.04.5-desktop-amd64.iso",
+    "checksum_url": "https://releases.ubuntu.com/22.04.5/SHA256SUMS",
+    "approx_bytes": 4700000000
   }
 ]
-

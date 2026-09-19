@@ -53,6 +53,7 @@ wizard, Pricing/FAQ/Auth/Settings/My Files pages, and the safety rules in
 | B1 | Welcome → Back up, no USB inserted | "No removable USB drives found" |
 | B2 | Insert USB → Rescan → select drive → Continue | Selection highlighted; OS step unlocks |
 | B3 | OS picker | Ubuntu selectable; MCT options marked unavailable in this build |
+| B3b | Migration plan | Source OS detected; folders listed with sizes; recommended pre-ticked; Linux target shows Wi-Fi warning; Continue disabled with nothing ticked |
 | B4 | Exclude review | File count + size shown; add/remove extra exclude rescans |
 | B5 | Password: short / mismatched / unchecked box | Blocked with plain-language error |
 | B6 | Backup progress | All 6 stages complete; manifest noted; no erase yet |

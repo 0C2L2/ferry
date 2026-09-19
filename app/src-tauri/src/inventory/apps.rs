@@ -2,10 +2,15 @@
 /// Reads from the three standard Uninstall paths used by Windows installers.
 use crate::types::AppEntry;
 use anyhow::Result;
-use winreg::enums::*;
-use winreg::{RegKey, HKEY};
+// winreg::enums::* provides HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER.
+// winreg::RegKey is the key handle; HKEY is the raw handle type.
+use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+use winreg::RegKey;
 
-const UNINSTALL_PATHS: &[(&str, HKEY)] = &[
+/// Registry uninstall paths and the hive they live under.
+/// Array of (&str, isize) because HKEY_LOCAL_MACHINE / HKEY_CURRENT_USER are
+/// isize constants (raw handle values) in winreg 0.52.
+const UNINSTALL_PATHS: &[(&str, isize)] = &[
     (r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", HKEY_LOCAL_MACHINE),
     (r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", HKEY_LOCAL_MACHINE),
     (r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", HKEY_CURRENT_USER),
@@ -22,11 +27,16 @@ pub fn scan() -> Result<Vec<AppEntry>> {
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (path, hive) in UNINSTALL_PATHS {
+        // RegKey::predef takes an isize raw handle.
         let root = RegKey::predef(*hive);
-        let Ok(uninstall) = root.open_subkey(path) else { continue };
+        let Ok(uninstall) = root.open_subkey_with_flags(path, KEY_READ) else {
+            continue;
+        };
 
         for subkey_name in uninstall.enum_keys().filter_map(|k| k.ok()) {
-            let Ok(subkey) = uninstall.open_subkey(&subkey_name) else { continue };
+            let Ok(subkey) = uninstall.open_subkey_with_flags(&subkey_name, KEY_READ) else {
+                continue;
+            };
 
             let name: String = subkey.get_value("DisplayName").unwrap_or_default();
             if name.is_empty() || seen.contains(&name) {
@@ -34,9 +44,16 @@ pub fn scan() -> Result<Vec<AppEntry>> {
             }
 
             // Skip system components and updates — not meaningful for the user.
-            let system_comp: String = subkey.get_value("SystemComponent").unwrap_or("0".to_string());
+            let system_comp: String = subkey.get_value("SystemComponent").unwrap_or_else(|_| "0".to_string());
             if system_comp == "1" {
                 continue;
+            }
+            // Skip Windows updates (GUIDs starting with KB).
+            if subkey_name.starts_with('{') || subkey_name.to_uppercase().starts_with("KB") {
+                // Keep GUIDs (they're real apps); skip "KB..." update entries.
+                if subkey_name.to_uppercase().starts_with("KB") {
+                    continue;
+                }
             }
 
             seen.insert(name.clone());
@@ -63,4 +80,3 @@ pub fn scan() -> Result<Vec<AppEntry>> {
     apps.sort_by_key(|a| a.name.to_lowercase());
     Ok(apps)
 }
-

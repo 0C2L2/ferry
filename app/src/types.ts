@@ -98,6 +98,21 @@ export interface ProgressPayload {
   current_item: string;
 }
 
+export interface ProfileFolder {
+  name: string;
+  path: string;
+  size_bytes: number;
+  file_count: number;
+  recommended: boolean;
+}
+
+export interface MigrationProfile {
+  source_os: string;
+  target_family: string;
+  folders: ProfileFolder[];
+  warnings: string[];
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
   if (bytes < 1024) return `${bytes} B`;

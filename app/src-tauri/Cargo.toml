@@ -24,24 +24,29 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["stream", "json"] }
+# rustls-tls avoids a native OpenSSL dependency on Windows
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
 
 sha2 = "0.10"
+sha1 = "0.10"
 hex = "0.4"
+urlencoding = "2"
 
 aes-gcm = "0.10"
-argon2 = "0.5"
+# argon2 0.5 with the password-hash feature exposes SaltString
+argon2 = { version = "0.5", features = ["std"] }
 rand = "0.8"
 
 walkdir = "2"
-zip = "2"
+zip = { version = "2", features = ["deflate"] }
 
 winreg = "0.52"
 windows = { version = "0.58", features = [
   "Win32_Storage_FileSystem",
   "Win32_Foundation",
   "Win32_System_Registry",
-  "Win32_System_WindowsProgramming",
+  # Win32_System_WindowsProgramming is NOT needed — DRIVE_REMOVABLE is
+  # defined as a bare u32 constant in Win32_Storage_FileSystem.
 ] }
 
 tempfile = "3"
@@ -55,4 +60,3 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 strip = true
-
