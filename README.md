@@ -43,7 +43,3 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 | File | Purpose |
 |---|---|
 | [`app/tech-plan.md`](app/tech-plan.md) | Technology stack, project structure, and phased coding plan |
-
-## Name
-
-"Ferry" — it carries you and your files across to the new OS, the way an actual ferry carries passengers and cargo across water.
