@@ -37,6 +37,15 @@ pub struct DriveInfo {
     pub is_removable: bool,
 }
 
+/// The two partitions created on a USB drive by `prepare_usb`, identified by
+/// their actual assigned drive letters (never assumed to match the original
+/// pre-partition letter, which diskpart's auto-`assign` does not guarantee).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsbLayout {
+    pub boot_letter: String,
+    pub data_letter: String,
+}
+
 /// An installed application entry from the registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppEntry {

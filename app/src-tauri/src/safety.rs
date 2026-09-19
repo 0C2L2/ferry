@@ -12,6 +12,17 @@ use windows::core::PCWSTR;
 /// symbol in windows-rs 0.58, so we define it here.
 const DRIVE_REMOVABLE: u32 = 2;
 
+/// The one way Ferry spells a drive root: `E:\`.
+///
+/// Every command that takes a "usb_root" resolves it with `validate_usb_root`
+/// / `validate_backup_dir`, which canonicalize the string as a real path — a
+/// bare `"E"` silently resolves as a *relative* path and fails. Anything
+/// producing a drive path for those commands must go through here so the two
+/// spellings can't drift apart.
+pub fn drive_root(letter: char) -> String {
+    format!("{}:\\", letter.to_ascii_uppercase())
+}
+
 /// Accept `E`, `E:`, `E:\` (any case) and return the uppercase drive letter.
 pub fn validate_drive_letter(input: &str) -> Result<char> {
     let trimmed = input.trim().trim_end_matches(['\\', '/']);
@@ -191,6 +202,16 @@ mod tests {
         assert!(sanitize_relative_path("C:/Windows/x").is_err());
         assert!(sanitize_relative_path("/absolute/x").is_err());
         assert!(sanitize_relative_path("").is_err());
+    }
+
+    #[test]
+    fn drive_root_is_a_path_not_a_bare_letter() {
+        // Regression: UsbLayout once returned a bare "D", which canonicalized
+        // as a relative path and produced "USB path does not exist: D".
+        assert_eq!(drive_root('d'), "D:\\");
+        assert_eq!(drive_root('E'), "E:\\");
+        // Whatever we produce must round-trip through the letter validator.
+        assert_eq!(validate_drive_letter(&drive_root('d')).unwrap(), 'D');
     }
 
     #[test]

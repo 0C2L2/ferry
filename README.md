@@ -37,9 +37,11 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 | [`company/business-model.md`](company/business-model.md) | Monetization plan |
 | [`company/risks.md`](company/risks.md) | Guardrails and legal/licensing groundwork |
 | [`company/mvp.md`](company/mvp.md) | MVP scope, feature cuts, and ship checklist |
+| [`company/completion-plan.md`](company/completion-plan.md) | Phased plan to finish the MVP: decisions needed, blockers, and sequencing |
 
 ### App & coding
 
 | File | Purpose |
 |---|---|
 | [`app/tech-plan.md`](app/tech-plan.md) | Technology stack, project structure, and phased coding plan |
+| [`assist-server/README.md`](assist-server/README.md) | Optional AI-assist sidecar (Nosana inference, Daytona sandbox verification, DNSimple share links) |

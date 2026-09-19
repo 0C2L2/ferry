@@ -3,10 +3,10 @@ import { api } from "../api";
 import { useTauriProgress } from "../hooks/useTauriProgress";
 import { ProgressBar, StageList, type StageState } from "../components/ProgressBar";
 import { ErrorBox } from "../components/ErrorBox";
-import type { DriveInfo, Manifest, ProgressPayload, ScanResult } from "../types";
+import type { Manifest, ProgressPayload, ScanResult } from "../types";
 
 interface Props {
-  drive: DriveInfo;
+  dataRoot: string;
   scan: ScanResult;
   password: string;
   onDone: (manifest: Manifest) => void;
@@ -14,7 +14,7 @@ interface Props {
 
 const STAGES = ["Copy files", "Browser data", "Wi-Fi profiles", "App & driver list", "Verify", "Encrypt"];
 
-export function BackupProgress({ drive, scan, password, onDone }: Props) {
+export function BackupProgress({ dataRoot, scan, password, onDone }: Props) {
   const [states, setStates] = useState<StageState[]>(STAGES.map(() => "pending"));
   const [detail, setDetail] = useState("");
   const [prog, setProg] = useState({ current: 0, total: 0 });
@@ -78,7 +78,7 @@ export function BackupProgress({ drive, scan, password, onDone }: Props) {
         }
       };
       try {
-        const root = drive.drive_letter;
+        const root = dataRoot;
         setStage(0, "active");
         await api.copyFiles(scan.files, root);
         setStage(0, "done");
@@ -150,7 +150,13 @@ export function BackupProgress({ drive, scan, password, onDone }: Props) {
   return (
     <div className="max-w-xl mx-auto">
       <h2 className="text-xl font-semibold mb-4">Backing up…</h2>
-      {error && <ErrorBox message="Backup failed. Nothing was erased." detail={error} expanded />}
+      {error && (
+        <ErrorBox
+          message="Backup failed. Your PC's files are untouched — only the USB drive was written to."
+          detail={error}
+          expanded
+        />
+      )}
       {warnings.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 mb-4 text-sm">
           <div className="font-medium mb-1">

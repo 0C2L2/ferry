@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api } from "../api";
+import { api, assistApi, isAssistConfigured } from "../api";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorBox } from "../components/ErrorBox";
-import type { DriveInfo } from "../types";
 import { formatBytes } from "../types";
 
 interface Props {
-  drive: DriveInfo;
+  dataRoot: string;
   onDone: () => void;
   onSkip: () => void;
 }
@@ -19,21 +18,23 @@ interface CloudProgress {
   parts: number;
 }
 
-/** "Extra Careful" — upload the already-encrypted Backup.enc to Backblaze B2.
- *  B2 never sees plaintext — our AES-256-GCM layer is still in place.
- *  The user supplies their own B2 Application Key (read-only bucket access).
+/** "Extra Careful" — upload the already-encrypted Backup.enc + backup.salt to
+ *  Ferry's own managed cloud storage. Free, no account, no keys to create —
+ *  Ferry mints a disposable, backup-scoped credential behind the scenes (see
+ *  assist-server/src/services/b2admin.ts) so the user never touches a real
+ *  B2 key. The only thing they need to keep is the backup ID this returns —
+ *  same importance as their encryption password.
  */
-export function CloudUpload({ drive, onDone, onSkip }: Props) {
-  const [keyId, setKeyId] = useState("");
-  const [appKey, setAppKey] = useState("");
-  const [bucket, setBucket] = useState("ferry-backup");
+export function CloudUpload({ dataRoot, onDone, onSkip }: Props) {
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<CloudProgress | null>(null);
-  const [fileId, setFileId] = useState<string | null>(null);
+  const [backupId, setBackupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   async function startUpload() {
-    if (!keyId.trim() || !appKey.trim() || !bucket.trim()) return;
     setBusy(true);
     setError(null);
     setProg(null);
@@ -44,13 +45,8 @@ export function CloudUpload({ drive, onDone, onSkip }: Props) {
     });
 
     try {
-      const id = await api.uploadBackupB2(
-        drive.drive_letter,
-        keyId.trim(),
-        appKey.trim(),
-        bucket.trim(),
-      );
-      setFileId(id);
+      const id = await api.uploadBackupB2(dataRoot);
+      setBackupId(id);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -59,15 +55,68 @@ export function CloudUpload({ drive, onDone, onSkip }: Props) {
     }
   }
 
-  if (fileId) {
+  async function getShareLink() {
+    if (!backupId) return;
+    setShareBusy(true);
+    setShareError(null);
+    try {
+      const link = await assistApi.createShareLink(backupId);
+      setShareLink(link.url);
+    } catch (err) {
+      setShareError(String(err));
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  if (backupId) {
     return (
       <div className="max-w-xl mx-auto text-center py-8">
         <div className="text-4xl mb-3">☁️</div>
         <h2 className="text-xl font-semibold mb-2">Cloud backup complete</h2>
-        <p className="text-sm text-gray-500 mb-1">
-          Backup.enc uploaded to B2 bucket <span className="font-medium">{bucket}</span>.
+        <p className="text-sm text-gray-500 mb-4">
+          Your encrypted backup is safe in Ferry's cloud storage — free, no account needed.
         </p>
-        <p className="text-xs text-gray-400 mb-6">File ID: {fileId}</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
+          <p className="text-sm font-medium text-amber-900 mb-1">
+            Write this down — you'll need it to restore from the cloud if you lose this USB:
+          </p>
+          <p className="font-mono text-sm bg-white border border-amber-200 rounded px-3 py-2 break-all select-all">
+            {backupId}
+          </p>
+          <p className="text-xs text-amber-700 mt-2">
+            You'll also need your encryption password. Without both, this cloud copy can't be
+            recovered — Ferry doesn't keep a separate record of either.
+          </p>
+        </div>
+
+        {isAssistConfigured() && (
+          <div className="mb-6">
+            {shareLink ? (
+              <p className="text-sm">
+                Shareable status link:{" "}
+                <a
+                  href={shareLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand-700 underline break-all"
+                >
+                  {shareLink}
+                </a>
+              </p>
+            ) : (
+              <button
+                onClick={getShareLink}
+                disabled={shareBusy}
+                className="text-sm px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-50"
+              >
+                {shareBusy ? "Provisioning link…" : "Get a shareable status link"}
+              </button>
+            )}
+            {shareError && <p className="text-xs text-red-600 mt-2">{shareError}</p>}
+          </div>
+        )}
+
         <button
           onClick={onDone}
           className="px-6 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
@@ -82,50 +131,11 @@ export function CloudUpload({ drive, onDone, onSkip }: Props) {
     <div className="max-w-xl mx-auto">
       <h2 className="text-xl font-semibold mb-1">Extra Careful — Cloud backup</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Upload your encrypted <code>Backup.enc</code> to Backblaze B2 for a second copy.
-        B2 never sees your plaintext — the AES-256 layer stays in place.
+        Upload your encrypted backup to Ferry's cloud storage for a second copy — free, and
+        nothing to sign up for. Ferry never sees your plaintext; the AES-256 layer you already
+        set stays in place the whole way, and the copy is deleted once you've restored it.
       </p>
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-5 text-sm text-amber-900">
-        You need a{" "}
-        <a
-          href="https://www.backblaze.com/b2/cloud-storage.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          Backblaze B2
-        </a>{" "}
-        account. Create an Application Key with <strong>read + write</strong> access to your
-        bucket. First 10 GB/month and all egress is free.
-      </div>
       {error && <ErrorBox message="Upload failed." detail={error} />}
-
-      <label className="block text-sm font-medium mb-1">B2 Key ID</label>
-      <input
-        value={keyId}
-        onChange={e => setKeyId(e.target.value)}
-        placeholder="00abc123…"
-        disabled={busy}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 text-sm font-mono"
-      />
-
-      <label className="block text-sm font-medium mb-1">B2 Application Key</label>
-      <input
-        type="password"
-        value={appKey}
-        onChange={e => setAppKey(e.target.value)}
-        placeholder="K00…"
-        disabled={busy}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 text-sm font-mono"
-      />
-
-      <label className="block text-sm font-medium mb-1">Bucket name</label>
-      <input
-        value={bucket}
-        onChange={e => setBucket(e.target.value)}
-        disabled={busy}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-5 text-sm"
-      />
 
       {prog && (
         <div className="mb-4">
@@ -140,10 +150,10 @@ export function CloudUpload({ drive, onDone, onSkip }: Props) {
       <div className="flex gap-3">
         <button
           onClick={startUpload}
-          disabled={busy || !keyId.trim() || !appKey.trim() || !bucket.trim()}
+          disabled={busy}
           className="px-6 py-2.5 rounded-lg bg-brand-600 text-white font-medium disabled:opacity-40 hover:bg-brand-700"
         >
-          {busy ? "Uploading…" : "Upload to B2"}
+          {busy ? "Uploading…" : "Back up to Ferry Cloud"}
         </button>
         <button
           onClick={onSkip}
@@ -156,4 +166,3 @@ export function CloudUpload({ drive, onDone, onSkip }: Props) {
     </div>
   );
 }
-

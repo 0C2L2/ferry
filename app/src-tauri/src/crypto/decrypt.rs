@@ -4,12 +4,17 @@
 /// into a staging directory.
 use crate::crypto::keygen::derive_key_with_salt;
 use crate::crypto::stream::decrypt_file_chunked;
-use crate::safety::{validate_staging_dir, validate_usb_root};
+use crate::safety::{validate_backup_dir, validate_staging_dir};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use zeroize::Zeroize;
 
 /// Tauri command: decrypt Backup.enc to a staging Backup/ directory.
+/// `usb_root` is the directory holding `Backup.enc` + `backup.salt` — either
+/// a removable USB (the normal case) or an OS temp directory a cloud
+/// download staged them into (see `cloud::b2::download_backup_b2`), which is
+/// why this validates via `validate_backup_dir` rather than requiring
+/// removable media specifically.
 /// Returns the path to the decrypted Backup/ directory.
 #[tauri::command]
 pub async fn decrypt_backup(
@@ -26,7 +31,7 @@ pub async fn decrypt_backup(
 
 fn run_decrypt(usb_root: PathBuf, password: &str, staging: PathBuf) -> Result<PathBuf> {
     let usb_root_str = usb_root.to_string_lossy().to_string();
-    let (canonical_usb, _) = validate_usb_root(&usb_root_str)?;
+    let canonical_usb = validate_backup_dir(&usb_root_str)?;
     // An empty staging dir means "use a fresh OS temp folder", so the UI never
     // has to discover the temp path itself.
     let staging = if staging.as_os_str().is_empty() {

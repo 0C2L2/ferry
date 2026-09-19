@@ -1,30 +1,32 @@
 /// SHA-256 checksum every file in Backup/, write manifest.json, and verify.
-/// The manifest is the gate that must pass before the erase step is unlocked.
+/// The erase step no longer waits on this — partitioning now happens before
+/// backup even starts (see disk/partition.rs) — but verification still gates
+/// UI progression: BackupProgress only advances to the next wizard step once
+/// this returns Ok, so nothing downstream (cloud upload, OS download,
+/// bootloader) runs against an unverified backup in the normal flow.
 use crate::backup::copy::copy_file_chunked;
 use crate::backup::scan::FileToBackup;
 use crate::safety::{
     ensure_inside, ensure_source_under_home, sanitize_relative_path, validate_usb_root,
 };
 use crate::types::{Manifest, ManifestEntry, SkippedEntry};
-use crate::AppState;
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter};
 
 /// Tauri command: hash every file in the Backup/ folder and write manifest.json.
 /// Returns the serialised manifest on success.
 #[tauri::command]
 pub async fn verify_backup(
     app: AppHandle,
-    state: State<'_, AppState>,
     files: Vec<FileToBackup>,
     usb_root: String,
     skipped: Vec<(String, String)>,
 ) -> Result<Manifest, String> {
-    build_and_verify_manifest(app, state, files, PathBuf::from(usb_root), skipped)
+    build_and_verify_manifest(app, files, PathBuf::from(usb_root), skipped)
         .await
         .map_err(|e| e.to_string())
 }
@@ -51,7 +53,6 @@ fn read_manifest_file(backup_dir: String) -> Result<Manifest> {
 
 async fn build_and_verify_manifest(
     app: AppHandle,
-    state: State<'_, AppState>,
     files: Vec<FileToBackup>,
     usb_root: PathBuf,
     skipped_raw: Vec<(String, String)>,
@@ -137,12 +138,6 @@ async fn build_and_verify_manifest(
         .context("Failed to serialise manifest")?;
     std::fs::write(&manifest_path, json)
         .context("Failed to write manifest.json")?;
-
-    // Unlock the erase step for this exact USB root in this backend session.
-    // The erase command consumes this one-time token.
-    if let Ok(mut verified) = state.verified_roots.lock() {
-        verified.insert(canonical_usb.to_string_lossy().to_string());
-    }
 
     Ok(manifest)
 }

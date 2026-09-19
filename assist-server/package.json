@@ -1,0 +1,27 @@
+{
+  "name": "ferry-assist-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hackathon sidecar service: Nosana-hosted AI app-migration suggestions, Daytona sandbox verification, DNSimple share links for Ferry's Cloud Backup.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@daytona/sdk": "^0.214.0",
+    "cors": "^2.8.6",
+    "dnsimple": "^13.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.22.0",
+    "nanoid": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.9",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}

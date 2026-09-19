@@ -20,7 +20,7 @@ fn enumerate_drives() -> Result<Vec<DriveInfo>> {
     let mut drives = Vec::new();
 
     for letter in b'A'..=b'Z' {
-        let drive = format!("{}:\\", letter as char);
+        let drive = crate::safety::drive_root(letter as char);
         let drive_w: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
 
         // Safety: drive_w is a valid null-terminated wide string.

@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-// Local-only accounts for this build. The core app needs no account at all;
-// an account personalizes the app and reserves your identity for Cloud Backup
-// (the planned paid feature). Passwords are stored as SHA-256 hashes, never
+// Local-only accounts for this build. The core app needs no account at all —
+// everything, including Cloud Backup, is free. An account is purely an
+// optional local profile. Passwords are stored as SHA-256 hashes, never
 // plaintext. There is no server yet — everything stays on this PC.
 
 export interface Account {
@@ -14,8 +14,6 @@ export interface Account {
 
 interface AuthState {
   account: Account | null;
-  plannedTier: string | null;
-  setPlannedTier: (tier: string | null) => void;
   signUp: (name: string, email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => void;
@@ -28,7 +26,6 @@ const AuthContext = createContext<AuthState | null>(null);
 
 const ACCOUNTS_KEY = "ferry.accounts";
 const SESSION_KEY = "ferry.session";
-const TIER_KEY = "ferry.plannedTier";
 
 function loadAccounts(): Account[] {
   try {
@@ -48,15 +45,6 @@ async function sha256Hex(text: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account | null>(null);
-  const [plannedTier, setPlannedTierState] = useState<string | null>(() =>
-    localStorage.getItem(TIER_KEY),
-  );
-
-  function setPlannedTier(tier: string | null) {
-    setPlannedTierState(tier);
-    if (tier) localStorage.setItem(TIER_KEY, tier);
-    else localStorage.removeItem(TIER_KEY);
-  }
 
   useEffect(() => {
     const email = localStorage.getItem(SESSION_KEY);
@@ -144,8 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         account,
-        plannedTier,
-        setPlannedTier,
         signUp,
         signIn,
         signOut,

@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { ArrowLeft, CircleHelp, RotateCcw, Tags, UserRound, Usb } from "lucide-react";
+import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import { Welcome } from "./pages/Welcome";
 import { DriveSelect } from "./pages/DriveSelect";
+import { PartitionUsb } from "./pages/PartitionUsb";
 import { OSSelect } from "./pages/OSSelect";
 import { MigrationPlan } from "./pages/MigrationPlan";
 import { ExcludeReview } from "./pages/ExcludeReview";
 import { PasswordSetup } from "./pages/PasswordSetup";
 import { BackupProgress } from "./pages/BackupProgress";
 import { DownloadProgress } from "./pages/DownloadProgress";
-import { WriteProgress } from "./pages/WriteProgress";
+import { BootloaderProgress } from "./pages/BootloaderProgress";
 import { Done } from "./pages/Done";
 import { RestoreDetect } from "./pages/RestoreDetect";
 import { RestoreProgress } from "./pages/RestoreProgress";
@@ -26,11 +28,13 @@ import type {
   OsSource,
   RestoreSummary,
   ScanResult,
+  UsbLayout,
 } from "./types";
 
 type Step =
   | "welcome"
   | "drives"
+  | "partition"
   | "os"
   | "plan"
   | "excludes"
@@ -38,7 +42,7 @@ type Step =
   | "backup"
   | "cloud"
   | "download"
-  | "write"
+  | "bootloader"
   | "done"
   | "restore-detect"
   | "restore"
@@ -46,7 +50,8 @@ type Step =
 
 const BACKUP_BACK: Partial<Record<Step, Step>> = {
   drives: "welcome",
-  os: "drives",
+  partition: "drives",
+  os: "partition",
   plan: "os",
   excludes: "plan",
   password: "excludes",
@@ -68,30 +73,36 @@ function Shell() {
   const [accountTab, setAccountTab] = useState<AccountTab>("profile");
   const [step, setStep] = useState<Step>("welcome");
   const [drive, setDrive] = useState<DriveInfo | null>(null);
+  const [usbLayout, setUsbLayout] = useState<UsbLayout | null>(null);
   const [os, setOs] = useState<OsSource | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [excludes, setExcludes] = useState<string[]>([]);
   const [roots, setRoots] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [isoFilename, setIsoFilename] = useState<string | null>(null);
   const [bootloaderWarning, setBootloaderWarning] = useState<string | null>(null);
   const [backupLoc, setBackupLoc] = useState<BackupLocation | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
+  const [cloudBackupId, setCloudBackupId] = useState<string | null>(null);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
   const [stagingDir, setStagingDir] = useState<string | null>(null);
 
   function restart() {
     setStep("welcome");
     setDrive(null);
+    setUsbLayout(null);
     setOs(null);
     setScan(null);
     setExcludes([]);
     setRoots([]);
     setPassword("");
     setManifest(null);
+    setIsoFilename(null);
     setBootloaderWarning(null);
     setBackupLoc(null);
     setRestorePassword("");
+    setCloudBackupId(null);
     setSummary(null);
     setStagingDir(null);
   }
@@ -186,14 +197,21 @@ function Shell() {
           <div className="max-w-3xl mx-auto pb-12">
         {view === "pricing" && <Pricing onAccount={() => setView("account")} />}
         {view === "faq" && <Faq />}
-        {view === "account" && (
-          <Account onPricing={() => setView("pricing")} tab={accountTab} onTabChange={setAccountTab} />
-        )}
+        {view === "account" && <Account tab={accountTab} onTabChange={setAccountTab} />}
         {view === "wizard" && step === "welcome" && (
           <Welcome onBackup={() => setStep("drives")} onRestore={() => setStep("restore-detect")} />
         )}
         {view === "wizard" && step === "drives" && (
-          <DriveSelect selected={drive} onSelect={setDrive} onNext={() => setStep("os")} />
+          <DriveSelect selected={drive} onSelect={setDrive} onNext={() => setStep("partition")} />
+        )}
+        {view === "wizard" && step === "partition" && drive && (
+          <PartitionUsb
+            drive={drive}
+            onDone={layout => {
+              setUsbLayout(layout);
+              setStep("os");
+            }}
+          />
         )}
         {view === "wizard" && step === "os" && (
           <OSSelect selected={os} onSelect={setOs} onNext={() => setStep("plan")} />
@@ -231,16 +249,16 @@ function Shell() {
         )}
         {view === "wizard" && (
           <>
-            {step === "backup" && drive && scan && (
+            {step === "backup" && usbLayout && scan && (
           <BackupProgress
-            drive={drive}
+            dataRoot={usbLayout.data_letter}
             scan={scan}
             password={password}
             onDone={m => {
               setManifest(m);
-              if (drive && os) {
+              if (usbLayout && os) {
                 recordBackup({
-                  drive: drive.drive_letter,
+                  drive: usbLayout.data_letter,
                   os: os.label,
                   files: m.files.length,
                   bytes: m.files.reduce((sum, f) => sum + f.size_bytes, 0),
@@ -250,28 +268,36 @@ function Shell() {
             }}
           />
         )}
-        {step === "cloud" && drive && (
+        {step === "cloud" && usbLayout && (
           <CloudUpload
-            drive={drive}
+            dataRoot={usbLayout.data_letter}
             onDone={() => setStep("download")}
             onSkip={() => setStep("download")}
           />
         )}
-        {step === "download" && drive && os && (
-          <DownloadProgress drive={drive} os={os} onDone={() => setStep("write")} />
+        {step === "download" && usbLayout && os && (
+          <DownloadProgress
+            dataRoot={usbLayout.data_letter}
+            os={os}
+            onDone={filename => {
+              setIsoFilename(filename);
+              setStep("bootloader");
+            }}
+          />
         )}
-        {step === "write" && drive && (
-          <WriteProgress
-            drive={drive}
+        {step === "bootloader" && usbLayout && isoFilename && (
+          <BootloaderProgress
+            layout={usbLayout}
+            isoFilename={isoFilename}
             onDone={w => {
               setBootloaderWarning(w);
               setStep("done");
             }}
           />
         )}
-        {step === "done" && drive && os && (
+        {step === "done" && usbLayout && os && (
           <Done
-            drive={drive}
+            dataRoot={usbLayout.data_letter}
             os={os}
             manifest={manifest}
             bootloaderWarning={bootloaderWarning}
@@ -280,9 +306,10 @@ function Shell() {
         )}
         {step === "restore-detect" && (
           <RestoreDetect
-            onFound={(loc, pw) => {
+            onFound={(loc, pw, cloudId) => {
               setBackupLoc(loc);
               setRestorePassword(pw);
+              setCloudBackupId(cloudId ?? null);
               setStep("restore");
             }}
           />
@@ -295,6 +322,11 @@ function Shell() {
               setSummary(s);
               setStagingDir(dir);
               recordRestore({ restored: s.restored, skipped: s.skipped, wifi: s.wifi_restored });
+              // Cleans up Ferry's cloud copy now that it's safely restored
+              // locally — best-effort, never blocks the user from continuing.
+              if (cloudBackupId) {
+                api.deleteCloudBackup(cloudBackupId).catch(() => {});
+              }
               setStep("apps");
             }}
           />

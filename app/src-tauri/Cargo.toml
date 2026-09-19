@@ -10,6 +10,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "ferry"
 path = "src/main.rs"
+# main.rs only calls ferry_lib::run(); every test lives in the lib. Cargo would
+# otherwise build a test harness for this binary, and that harness inherits the
+# requireAdministrator manifest from build.rs — so `cargo test` from a normal
+# shell would die with "The requested operation requires elevation (os error
+# 740)" while running zero actual tests.
+test = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

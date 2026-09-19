@@ -128,7 +128,6 @@ After the new OS is installed and the user plugs in the USB drive, they run Ferr
 
 | Feature | Reason cut | Lives in |
 |---|---|---|
-| Cloud overflow storage | Requires account system and backend infrastructure; post-MVP | [`business-model.md`](business-model.md) |
 | License-key recovery | Nice-to-have; registry scanning for keys is already partially done | [`extensions.md`](extensions.md) |
 | Hardware / driver preflight | High value for Linux switchers; driver inventory (above) seeds this | [`extensions.md`](extensions.md) |
 | Multiboot (multiple ISOs) | Complex boot chain; out of scope | [`extensions.md`](extensions.md) |

@@ -15,20 +15,10 @@ mod wifi;
 mod restore;
 mod cloud;
 
-use std::collections::HashSet;
-use std::sync::Mutex;
 use tauri::Manager;
-
-#[derive(Default)]
-pub struct AppState {
-    /// Canonical USB roots whose backups passed verification in this session.
-    /// Consumed one-time by the erase step to enforce backup → verify → erase.
-    pub verified_roots: Mutex<HashSet<String>>,
-}
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(AppState::default())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -78,6 +68,8 @@ pub fn run() {
             restore::copy::restore_files,
             // ── Cloud Backup ──────────────────────────────────────────────
             cloud::b2::upload_backup_b2,
+            cloud::b2::download_backup_b2,
+            cloud::b2::delete_cloud_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ferry");

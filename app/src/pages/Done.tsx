@@ -1,21 +1,21 @@
 import { CheckCircle2, TriangleAlert } from "lucide-react";
-import type { DriveInfo, Manifest, OsSource } from "../types";
+import type { Manifest, OsSource } from "../types";
 
 interface Props {
-  drive: DriveInfo;
+  dataRoot: string;
   os: OsSource;
   manifest: Manifest | null;
   bootloaderWarning: string | null;
   onRestart: () => void;
 }
 
-export function Done({ drive, os, manifest, bootloaderWarning, onRestart }: Props) {
+export function Done({ dataRoot, os, manifest, bootloaderWarning, onRestart }: Props) {
   return (
     <div className="max-w-xl mx-auto text-center">
       <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
       <h2 className="text-2xl font-bold mb-2">USB ready</h2>
       <p className="text-gray-600 mb-6">
-        {drive.drive_letter} now holds the {os.label} installer
+        {dataRoot} now holds the {os.label} installer
         {manifest ? ` and your encrypted backup (${manifest.files.length} files)` : ""}.
       </p>
       {bootloaderWarning && (

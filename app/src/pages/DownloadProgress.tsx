@@ -3,19 +3,20 @@ import { api } from "../api";
 import { useTauriProgress } from "../hooks/useTauriProgress";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorBox } from "../components/ErrorBox";
-import type { DriveInfo, OsSource, ProgressPayload } from "../types";
+import type { OsSource, ProgressPayload } from "../types";
 
 interface Props {
-  drive: DriveInfo;
+  dataRoot: string;
   os: OsSource;
-  onDone: () => void;
+  onDone: (isoFilename: string) => void;
 }
 
-export function DownloadProgress({ drive, os, onDone }: Props) {
+export function DownloadProgress({ dataRoot, os, onDone }: Props) {
   const [prog, setProg] = useState({ current: 0, total: 0 });
   const [item, setItem] = useState("Starting download…");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [isoFilename, setIsoFilename] = useState<string | null>(null);
   const started = useRef(false);
 
   useTauriProgress("download:progress", (p: ProgressPayload) => {
@@ -27,8 +28,12 @@ export function DownloadProgress({ drive, os, onDone }: Props) {
     if (started.current) return;
     started.current = true;
     api
-      .downloadOs(os.id, drive.drive_letter)
-      .then(() => setDone(true))
+      .downloadOs(os.id, dataRoot)
+      .then(path => {
+        const filename = path.split(/[\\/]/).pop() ?? path;
+        setIsoFilename(filename);
+        setDone(true);
+      })
       .catch(err => setError(String(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,9 +51,9 @@ export function DownloadProgress({ drive, os, onDone }: Props) {
       {!error && (
         <ProgressBar current={prog.current} total={prog.total} label={`${item} · ${pct}%`} />
       )}
-      {done && (
+      {done && isoFilename && (
         <button
-          onClick={onDone}
+          onClick={() => onDone(isoFilename)}
           className="mt-6 px-6 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
         >
           Continue →

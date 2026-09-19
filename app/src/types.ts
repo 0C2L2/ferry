@@ -10,6 +10,11 @@ export interface DriveInfo {
   is_removable: boolean;
 }
 
+export interface UsbLayout {
+  boot_letter: string;
+  data_letter: string;
+}
+
 export type SourceType = "microsoft_mct" | "direct_url";
 
 export interface OsSource {
@@ -111,6 +116,22 @@ export interface MigrationProfile {
   target_family: string;
   folders: ProfileFolder[];
   warnings: string[];
+}
+
+export interface AppSuggestion {
+  name: string;
+  suggestion: string;
+  command: string | null;
+}
+
+export interface SandboxVerifyResult {
+  success: boolean;
+  output: string;
+}
+
+export interface ShareLink {
+  subdomain: string;
+  url: string;
 }
 
 export function formatBytes(bytes: number): string {

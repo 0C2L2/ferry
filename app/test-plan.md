@@ -22,8 +22,8 @@ wizard, Pricing/FAQ/Auth/Settings/My Files pages, and the safety rules in
 - Sign up in-app (Sign in → Create account) with a throwaway email, e.g.
   `tester@example.com` / password `test-password-123`.
 - All auth data lives in browser localStorage (`ferry.accounts`, `ferry.session`,
-  `ferry.plannedTier`, `ferry.history`) — inspect via DevTools
-  (`FERRY_DEVTOOLS=1`). Sign out to start a session clean.
+  `ferry.history`) — inspect via DevTools (`FERRY_DEVTOOLS=1`). Sign out to
+  start a session clean.
 
 ## 3. Functional cases
 
@@ -32,45 +32,53 @@ wizard, Pricing/FAQ/Auth/Settings/My Files pages, and the safety rules in
 | ID | Steps | Expected |
 |---|---|---|
 | A1 | Sign up with invalid email / short password / mismatched state | Clear inline error, no account created |
-| A2 | Sign up valid → header shows first name → reload app | Session persists, Account page shows Ferry Free |
+| A2 | Sign up valid → header shows first name → reload app | Session persists |
 | A3 | Sign out → sign in with wrong password | "Wrong email or password", stays signed out |
 | A4 | Sign in correct → sign out | Header returns to "Sign in", session key removed |
 
-### Pricing & plan choice
+### Pricing
 
 | ID | Steps | Expected |
 |---|---|---|
-| P1 | Open Pricing signed out, click a Cloud tier | Redirects to Account (sign-in) page |
-| P2 | Signed in, click "Up to 200 GB" | Row shows "✓ planned"; Account page shows planned tier |
-| P3 | Click the same tier again | Preference cleared |
-| P4 | Click "Choose Corporate" signed in | "✓ Corporate planned" + no-charge note; visible on Account |
-| P5 | Click "Planned — not available" button | Disabled; nothing happens (no fake checkout) |
+| P1 | Open Pricing | Shows "$0 forever" with the full feature list, including Cloud Backup — no tiers, no sign-in required |
+| P2 | Click "Create an optional local profile" | Navigates to Account sign-in/sign-up |
 
 ### Backup wizard (needs spare USB)
+
+As of 2026-09-19 the erase/partition step runs immediately after drive
+selection — before backup, cloud upload, or download ever write anything —
+so nothing downstream can be lost to it. The bootloader is installed as a
+separate final step, extracted from the downloaded OS image itself (see
+`company/completion-plan.md` Phase 1).
 
 | ID | Steps | Expected |
 |---|---|---|
 | B1 | Welcome → Back up, no USB inserted | "No removable USB drives found" |
-| B2 | Insert USB → Rescan → select drive → Continue | Selection highlighted; OS step unlocks |
-| B3 | OS picker | Ubuntu selectable; MCT options marked unavailable in this build |
-| B3b | Migration plan | Source OS detected; folders listed with sizes; recommended pre-ticked; Linux target shows Wi-Fi warning; Continue disabled with nothing ticked |
-| B4 | Exclude review | File count + size shown; add/remove extra exclude rescans |
-| B5 | Password: short / mismatched / unchecked box | Blocked with plain-language error |
-| B6 | Backup progress | All 6 stages complete; manifest noted; no erase yet |
-| B7 | Download Ubuntu | Progress %, checksum verified; corrupt download deleted + error |
-| B8 | Write step without checking the box | Erase button stays disabled |
-| B9 | Check box → Erase & write | Partition/format stages pass; Done page with boot steps |
-| B10 | My Files after B6 | New "Backup" record with drive, OS, file count, size |
+| B2 | Insert USB → Rescan → select drive → Continue | Selection highlighted; advances to "Prepare USB drive" |
+| B3 | Prepare USB drive, box unchecked | "Erase & prepare drive" stays disabled |
+| B4 | Check box → Erase & prepare drive | Partition/format stage passes; drive now shows FERRY_BOOT (FAT32) + FERRY_DATA (exFAT) in Explorer; advances to OS picker |
+| B5 | OS picker | Ubuntu selectable; MCT (Windows) options marked unavailable in this build |
+| B5b | Migration plan | Source OS detected; folders listed with sizes; recommended pre-ticked; Linux target shows Wi-Fi warning; Continue disabled with nothing ticked |
+| B6 | Exclude review | File count + size shown; add/remove extra exclude rescans |
+| B7 | Password: short / mismatched / unchecked box | Blocked with plain-language error |
+| B8 | Backup progress | All 6 stages complete against the FERRY_DATA partition; manifest noted |
+| B9 | Cloud upload screen (needs `assist-server` running with B2 master key configured) | "Back up to Ferry Cloud" uploads with no fields to fill in; success shows a backup ID with a "write this down" prompt; "Skip" advances either way |
+| B9b | Restore screen → "Lost your USB? Restore from Ferry Cloud instead" | Backup ID + password download and decrypt via the cloud path; a wrong/unknown ID fails closed with a clear error |
+| B9c | Restore from cloud, then complete restore | Backend deletes both cloud files for that backup ID afterward (verify via B2 dashboard or a repeat download-key call failing) |
+| B10 | Download Ubuntu | Progress %, checksum verified; corrupt download deleted + error |
+| B11 | Finishing USB (bootloader step) | Boot files copied from the ISO onto FERRY_BOOT; grub.cfg written; Done page shown. A failure here shows a warning on Done but the backup/OS image are untouched |
+| B12 | My Files after B8 | New "Backup" record with drive, OS, file count, size |
 
 ### Safety rules (must all hold)
 
 | ID | Check |
 |---|---|
 | S1 | System (non-removable) drives never appear in DriveSelect |
-| S2 | Erase step unreachable without a verified backup in the same session (restart app → token gone) |
-| S3 | Second explicit erase confirmation required before `diskpart clean` |
+| S2 | Prepare-USB re-checks removability at the OS level immediately before `diskpart clean` runs, even if the frontend is tampered with |
+| S3 | Explicit erase confirmation checkbox required before "Erase & prepare drive" is clickable |
 | S4 | Wrong backup password at restore → clear error, no partial/corrupt output |
 | S5 | USB unplugged mid-copy → failure surfaces, no silent success |
+| S6 | Bootloader step fails closed (clear error, nothing half-written) if the OS image lacks `boot/grub/loopback.cfg` |
 
 ### Restore & picker (needs prepared USB + password)
 

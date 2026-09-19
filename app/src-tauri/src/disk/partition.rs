@@ -1,65 +1,46 @@
 /// Partition a USB drive: small FAT32 boot partition + large exFAT data partition.
 /// Uses diskpart via a script file — requires the process to be running as Administrator.
 ///
-/// SAFETY INVARIANT: this function must only be called after backup verification
-/// has completed and returned Ok. The caller (Tauri command) enforces this.
-use crate::safety::{
-    ensure_removable_drive_letter, validate_drive_letter, validate_usb_root,
-};
-use crate::AppState;
+/// SAFETY INVARIANT: this is the point of no return for whatever was previously
+/// on the drive, so it runs immediately after drive selection — before backup,
+/// download, or bootloader install ever write anything. Nothing downstream can
+/// lose data to this step because nothing downstream has written anything yet.
+/// The only backend-enforced gate is "the drive is actually removable"; the
+/// explicit user confirmation is a UI-level checkbox shown right before this call.
+use crate::safety::{drive_root, ensure_removable_drive_letter, validate_drive_letter};
+use crate::types::UsbLayout;
 use anyhow::{bail, Context, Result};
 use std::io::Write;
-use tauri::State;
 
 /// Tauri command: partition the given drive letter and format both partitions.
-/// `drive_letter` must be a removable drive (e.g. "E:").
-/// `usb_root` must be the verified backup location on that same drive.
-/// Verification is consumed one-time from backend state; a frontend boolean is
-/// not accepted because it cannot prove the erase order was followed.
+/// `drive_letter` must be a removable drive (e.g. "E:"). Returns the actual
+/// drive letters diskpart assigned to each new partition — never assume these
+/// match the original `drive_letter`, which is destroyed by `clean`.
 #[tauri::command]
-pub async fn prepare_usb(
-    drive_letter: String,
-    usb_root: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn prepare_usb(drive_letter: String) -> Result<UsbLayout, String> {
     let letter = validate_drive_letter(&drive_letter).map_err(|e| e.to_string())?;
-    ensure_removable_drive_letter(letter).map_err(|e| e.to_string())?;
-    let (canonical_root, root_letter) =
-        validate_usb_root(&usb_root).map_err(|e| e.to_string())?;
-    if root_letter != letter {
-        return Err("USB backup location is not on the selected drive.".to_string());
-    }
-
-    {
-        let mut verified = state.verified_roots.lock().map_err(|_| {
-            "Backend verification state is unavailable; cannot unlock erase.".to_string()
-        })?;
-        let key = canonical_root.to_string_lossy().to_string();
-        if !verified.remove(&key) {
-            return Err(
-                "Backup has not been verified in this session. Cannot erase the drive."
-                    .to_string(),
-            );
-        }
-    }
-
-    // Re-check removability immediately before resolving and wiping the disk.
     ensure_removable_drive_letter(letter).map_err(|e| e.to_string())?;
     partition_drive(letter).await.map_err(|e| e.to_string())
 }
 
-async fn partition_drive(letter: char) -> Result<()> {
+async fn partition_drive(letter: char) -> Result<UsbLayout> {
     // Resolve the disk number from the validated drive letter using PowerShell.
     // Only a single A-Z letter reaches the shell, so no shell injection is possible.
     let disk_number =
         get_disk_number(letter).context("Could not determine disk number for drive letter")?;
     ensure_removable_drive_letter(letter)?;
 
+    // Boot partition is 100 MB, not 32 MB: FAT32 needs at least 65,527
+    // clusters (~33.5 MB at 512-byte sectors), so a 32 MB partition sits right
+    // at/below the floor and `format fs=fat32` fails on it. Ventoy hits the
+    // same wall and formats its ~33 MB VTOYEFI partition as FAT16 for exactly
+    // this reason. 100 MB is the standard EFI System Partition size and is
+    // negligible on any stick large enough to hold an OS image anyway.
     let script = format!(
         "select disk {disk}\n\
          clean\n\
          convert mbr\n\
-         create partition primary size=32\n\
+         create partition primary size=100\n\
          format fs=fat32 quick label=\"FERRY_BOOT\"\n\
          assign\n\
          create partition primary\n\
@@ -70,7 +51,56 @@ async fn partition_drive(letter: char) -> Result<()> {
     );
 
     run_diskpart_script(&script).context("diskpart failed")?;
-    Ok(())
+
+    // diskpart's `assign` picks the next free letter, which is not guaranteed
+    // to be `letter` (or in any particular order) — resolve both partitions by
+    // the labels we just gave them instead of assuming anything about letters.
+    // Windows takes a moment to surface a freshly formatted volume, so retry
+    // briefly rather than failing on a race we created ourselves.
+    let boot_letter = get_letter_by_label_retrying("FERRY_BOOT")
+        .context("Partitioned the drive but could not find the new FERRY_BOOT partition")?;
+    let data_letter = get_letter_by_label_retrying("FERRY_DATA")
+        .context("Partitioned the drive but could not find the new FERRY_DATA partition")?;
+
+    // Spelled as full drive roots (`E:\`), not bare letters: these get passed
+    // straight back into commands that canonicalize them as paths.
+    Ok(UsbLayout {
+        boot_letter: drive_root(boot_letter),
+        data_letter: drive_root(data_letter),
+    })
+}
+
+/// Windows doesn't always surface a newly formatted volume immediately, so
+/// poll briefly before declaring it missing.
+fn get_letter_by_label_retrying(label: &str) -> Result<char> {
+    let mut last_err = None;
+    for attempt in 0..10 {
+        match get_letter_by_label(label) {
+            Ok(letter) => return Ok(letter),
+            Err(e) => last_err = Some(e),
+        }
+        if attempt < 9 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Volume '{label}' never appeared")))
+}
+
+fn get_letter_by_label(label: &str) -> Result<char> {
+    // `label` is always one of our own two hardcoded constants above, never
+    // renderer input, so interpolating it into the PowerShell command is safe.
+    let script = format!("(Get-Volume -FileSystemLabel '{label}').DriveLetter");
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .context("Failed to run PowerShell")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    let mut chars = trimmed.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) if c.is_ascii_alphabetic() => Ok(c.to_ascii_uppercase()),
+        _ => bail!("Could not resolve a drive letter for volume label '{label}' (got: '{trimmed}')"),
+    }
 }
 
 fn get_disk_number(letter: char) -> Result<u32> {
@@ -119,10 +149,69 @@ fn run_diskpart_script(script: &str) -> Result<()> {
     let _ = std::fs::remove_file(&script_path);
 
     let output = result?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
         bail!("diskpart exited with error: {} {}", stdout.trim(), stderr.trim());
     }
+
+    // diskpart exits 0 even when individual commands inside the script fail —
+    // it reports the failure on stdout and moves on. Without this check a
+    // failed format looks like success here, and the real error only surfaces
+    // later as a confusing "could not find the FERRY_BOOT partition".
+    if let Some(problem) = find_diskpart_error(&stdout) {
+        bail!("diskpart reported: {}", problem);
+    }
     Ok(())
+}
+
+/// Scans diskpart's own output for a reported failure. Returns the offending
+/// line so the user sees diskpart's actual words, not a guess at what broke.
+fn find_diskpart_error(stdout: &str) -> Option<String> {
+    const MARKERS: [&str; 7] = [
+        "has encountered an error",
+        "is not valid",
+        "access is denied",
+        "no disk selected",
+        "failed",
+        "unable to",
+        "cannot",
+    ];
+    stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .find(|line| {
+            let lower = line.to_lowercase();
+            MARKERS.iter().any(|m| lower.contains(m))
+        })
+        .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_diskpart_error;
+
+    #[test]
+    fn diskpart_success_output_is_not_flagged() {
+        let ok = "DiskPart succeeded in cleaning the disk.\n\
+                  DiskPart succeeded in creating the specified partition.\n\
+                  DiskPart successfully formatted the volume.\n\
+                  DiskPart successfully assigned the drive letter or mount point.";
+        assert!(find_diskpart_error(ok).is_none());
+    }
+
+    #[test]
+    fn diskpart_failure_is_detected_despite_exit_zero() {
+        let bad = "DiskPart succeeded in creating the specified partition.\n\
+                   The format failed to complete successfully.\n";
+        assert!(find_diskpart_error(bad).is_some());
+    }
+
+    #[test]
+    fn access_denied_is_detected() {
+        let denied = "DiskPart has encountered an error: Access is denied.";
+        assert!(find_diskpart_error(denied).is_some());
+    }
 }

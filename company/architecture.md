@@ -31,18 +31,14 @@ Byte-copying installed programs from one Windows install to another is unreliabl
 
 ## Cloud backup (overflow and Extra Careful)
 
-When personal data exceeds what's left on the USB after the OS image is written, or when the user wants a second encrypted cloud copy alongside the USB, Ferry offers Cloud Backup as a paid add-on. See [`business-model.md`](business-model.md) for plan details and pricing.
+When personal data exceeds what's left on the USB after the OS image is written, or when the user wants a second encrypted cloud copy alongside the USB, Ferry offers Cloud Backup. It is **free** — see [`business-model.md`](business-model.md) — hosted on Ferry's own Backblaze B2 account. As of 2026-09-19 this is **Ferry-managed**, not bring-your-own-B2: the user never creates an account, a bucket, or a key. They get back a single opaque backup ID (a UUID) to write down alongside their password.
 
-Technical notes:
+**Why the desktop app never holds Ferry's B2 master key:** a distributed desktop binary can always have embedded secrets extracted from it (`strings`, a decompiler). If the app carried Ferry's real B2 credentials, every install would effectively leak them, and anyone could run up storage costs, fill the bucket with junk, or touch other users' data. So the master key lives only in `assist-server` (see `assist-server/src/services/b2admin.ts`), and the desktop app talks to that sidecar instead of to B2 directly for credentials.
 
-**Individual plan — Backblaze B2 backend:**
-- Storage cost: ~\$6–7/TB/month. Holding 200 GB for one month costs ~\$1.40.
-- Egress cost: **free** up to 3× whatever is stored that month. A full one-time restore after a migration comfortably fits inside this allowance. This free-egress policy is why B2 is chosen for the Individual plan — on GCS or S3, a 200 GB restore would cost ~\$16–24 in egress alone, erasing the margin.
-- Positioning: a **migration bridge**, not permanent backup. Upload before the wipe, download after restore, then let the cloud copy expire.
+Technical notes (`app/src-tauri/src/cloud/b2.rs` + `assist-server/src/services/b2admin.ts`):
 
-**Corporate / SMB plan — GCS, AWS S3, or Azure Blob backend:**
-- Chosen for enterprise-grade SLA, global redundancy, and audit trails that business customers require.
-- Egress is not free on these providers (~\$0.08–0.12/GB). Corporate plan pricing is subscription-based (not one-time) to account for this.
-
-**Both plans:**
-- Files are encrypted client-side (AES-256) before upload. The encryption key is derived from the user's password and never transmitted to Ferry's servers — Ferry cannot read the contents of a user's cloud backup.
+- **Per-backup, disposable credentials.** For every upload, `assist-server` asks B2 to mint a brand-new Application Key scoped to exactly one bucket, one `namePrefix` (`<backup_id>/`), one capability (`writeFiles` for upload, `readFiles` for restore), and a short validity window (6h for upload, 30 min for restore). Even a leaked key can't touch any other backup, and it expires on its own. The desktop app authorizes with that scoped key directly against B2 for the actual file transfer — `assist-server`'s own bandwidth is never in the path for the bytes themselves, only the small "mint me a key" calls.
+- Each backup lives at `<backup_id>/Backup.enc` and `<backup_id>/backup.salt` in the shared bucket — the ID is the only thing that needs to survive a lost USB; the password alone isn't enough without it, matching how the local salt file already works.
+- **Backend: Backblaze B2.** Storage cost to Ferry: ~\$6–7/TB/month. Egress is **free** up to 3× whatever is stored that month — this is why B2, specifically, is the backend: a full one-time restore comfortably fits inside the free allowance, unlike GCS/S3 where egress alone would be real money per restore.
+- Positioning: a **migration bridge**, not permanent backup. Once `restore_files` succeeds, the desktop app tells `assist-server` to delete both objects for that backup ID — Ferry doesn't hold onto a copy after the user has it back.
+- The already-encrypted `Backup.enc` (+ `backup.salt`) is uploaded as-is via B2's Large File API (chunked, resumable); B2 never sees plaintext. The AES-256-GCM key is derived from the user's password and never transmitted anywhere — Ferry cannot read the contents of a user's cloud backup, even though it now hosts the storage.
