@@ -1,49 +1,52 @@
-/// Installs a bootloader by extracting it from the OS image itself — Ferry
-/// never bundles or vouches for a third-party bootloader binary. Every
-/// official OS ISO already ships its own vendor-signed bootloader; this copies
-/// it from the already-downloaded, checksum-verified ISO onto Ferry's small
-/// FAT32 boot partition, then writes a GRUB config that boots the ISO (still
-/// sitting as a file on the exFAT data partition) via GRUB's loopback support.
+/// Makes the USB bootable the way every other USB writer does it: extract the
+/// ISO's entire contents onto the FAT32 partition. The ISO already ships its
+/// own vendor-signed bootloader at `/EFI/boot/bootx64.efi` and its own
+/// `grub.cfg`, so once the files are in place UEFI firmware boots it directly.
+/// Ferry writes no boot configuration of its own and bundles no bootloader.
 ///
-/// Verified against a real Ubuntu 24.04.2 desktop ISO (2026-09-19, by
-/// downloading its first 100 MB and mounting it): `/EFI/boot/` contains a
-/// Canonical-signed `bootx64.efi` (shim) + `grubx64.efi` + `mmx64.efi`, and
-/// `/boot/grub/` ships `loopback.cfg` specifically for this "ISO on a USB
-/// stick, GRUB loopback-boots it" scenario — the same technique Rufus uses
-/// for Ubuntu-family ISOs in "ISO Image mode". `loopback.cfg` expects a
-/// `${iso_path}` variable to already be set, which the grub.cfg written here
-/// provides.
+/// This replaced a GRUB-loopback scheme (keep the ISO as a single file, hand-
+/// write a `grub.cfg` that loopback-mounts it). That exists to dodge FAT32's
+/// 4 GB per-file limit — but measuring the real Ubuntu 24.04.2 ISO showed its
+/// largest member is `casper/minimal.squashfs` at 1.69 GB, comfortably under
+/// the limit. The limit never bound, so the complexity bought nothing: it
+/// added a hand-written boot config, a dependency on GRUB's exFAT module
+/// loading, and partition-addressing assumptions, all on the one code path
+/// that cannot be verified without a reboot. Plain extraction has none of
+/// that and is the most-travelled boot path in existence.
 ///
-/// Ubuntu-only for now: this relies on GRUB's loopback boot support, which
-/// Windows ISOs don't use (Windows boots via bootmgfw.efi + a BCD store, a
-/// different mechanism entirely — separate future work, not an extension of
-/// this file).
+/// The ISO file is deleted from the data partition afterwards — it has served
+/// its purpose and would otherwise waste several GB that the user's backup
+/// needs.
 ///
-/// HONESTY NOTE: this has been verified against the real ISO's file layout
-/// and content, and follows a well-documented, widely-used technique, but has
-/// NOT been boot-tested end-to-end in this session (no UEFI VM/hardware was
-/// available). Boot-test on a spare machine or a UEFI-enabled VM (QEMU+OVMF)
-/// before relying on this for a live demo.
+/// HONESTY NOTE: not boot-tested in this session (no UEFI VM/hardware
+/// available). Boot-test on a spare machine or QEMU+OVMF before relying on it.
 use crate::safety::{ensure_removable_drive_letter, sanitize_filename, validate_drive_letter};
 use anyhow::{bail, Context, Result};
-use std::io::Write;
+use sha2::{Digest, Sha256};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use tauri::{AppHandle, Emitter};
 
-/// Tauri command: build the boot partition's contents from the OS image that
-/// `download_os_image` already placed on the data partition.
+/// Tauri command: extract the OS image that `download_os_image` placed on the
+/// data partition onto the bootable FAT32 partition.
 #[tauri::command]
 pub async fn write_bootloader(
+    app: AppHandle,
     boot_letter: String,
     data_letter: String,
     iso_filename: String,
 ) -> Result<(), String> {
-    install_bootloader(&boot_letter, &data_letter, &iso_filename)
+    install_bootloader(&app, &boot_letter, &data_letter, &iso_filename)
         .await
         .map_err(|e| e.to_string())
 }
 
-async fn install_bootloader(boot_letter: &str, data_letter: &str, iso_filename: &str) -> Result<()> {
+async fn install_bootloader(
+    app: &AppHandle,
+    boot_letter: &str,
+    data_letter: &str,
+    iso_filename: &str,
+) -> Result<()> {
     let boot = validate_drive_letter(boot_letter)?;
     let data = validate_drive_letter(data_letter)?;
     ensure_removable_drive_letter(boot)?;
@@ -66,86 +69,123 @@ async fn install_bootloader(boot_letter: &str, data_letter: &str, iso_filename: 
         .context("Boot partition is not available")?;
 
     let mounted_letter = mount_iso(&iso_path)?;
-    let copy_result = copy_boot_files(mounted_letter, &boot_root);
+    let copy_result = extract_iso(app, mounted_letter, &boot_root);
     // Always dismount, even if copying failed, so we never leak a drive letter.
     let dismount_result = dismount_iso(&iso_path);
     copy_result?;
     dismount_result?;
 
-    write_grub_cfg(&boot_root, &filename)?;
+    // The ISO has been unpacked; keeping it would waste GBs the backup needs.
+    std::fs::remove_file(&iso_path)
+        .with_context(|| format!("Could not remove {} after extracting it", iso_path.display()))?;
     Ok(())
 }
 
-fn copy_boot_files(mounted_letter: char, boot_root: &Path) -> Result<()> {
+/// Copies every file out of the mounted ISO onto the boot partition, emitting
+/// progress as it goes — this moves gigabytes and a silent UI invites the user
+/// to pull the drive mid-write.
+fn extract_iso(app: &AppHandle, mounted_letter: char, boot_root: &Path) -> Result<()> {
     let iso_root = PathBuf::from(format!("{mounted_letter}:\\"));
-    let efi_boot_src = iso_root.join("EFI").join("boot");
-    let grub_src = iso_root.join("boot").join("grub");
-    if !efi_boot_src.is_dir() {
-        bail!("This OS image has no EFI/boot directory — cannot build a bootable USB for it");
-    }
-    if !grub_src.is_dir() {
-        bail!("This OS image has no boot/grub directory — cannot build a bootable USB for it");
+    if !iso_root.join("EFI").is_dir() {
+        bail!("This OS image has no EFI directory — Ferry cannot make it bootable");
     }
 
-    copy_dir_recursive(&efi_boot_src, &boot_root.join("EFI").join("boot"))
-        .context("Failed to copy EFI/boot from the OS image")?;
-    copy_dir_recursive(&grub_src, &boot_root.join("boot").join("grub"))
-        .context("Failed to copy boot/grub from the OS image")?;
+    let files: Vec<_> = walkdir::WalkDir::new(&iso_root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .collect();
+    let total = files.len() as u64;
 
-    let loopback = boot_root.join("boot").join("grub").join("loopback.cfg");
-    if !loopback.exists() {
-        bail!(
-            "This OS image does not include boot/grub/loopback.cfg, so Ferry cannot build a \
-             bootable USB for it (verified working for the Ubuntu 24.04.2 desktop ISO — a \
-             different release or flavor may lay out its boot files differently)"
+    // FAT32 cannot hold a file of 4 GiB or more. Ubuntu never hits this, but
+    // a Windows ISO can (install.wim). Fail BEFORE copying anything, with the
+    // reason spelled out, instead of dying halfway through a multi-GB copy.
+    for entry in files.iter() {
+        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+        fits_fat32(&entry.path().display().to_string(), size)?;
+    }
+
+    for (i, entry) in files.iter().enumerate() {
+        let rel = entry
+            .path()
+            .strip_prefix(&iso_root)
+            .context("ISO entry escaped the image root")?;
+        let dest = boot_root.join(rel);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Could not create {}", parent.display()))?;
+        }
+        // Content check, not just byte counts: hash the source WHILE copying
+        // (one pass) and the written file after, then compare. A bit-rotted
+        // or short-written file of the right length would pass a size check
+        // and only fail at boot time on another machine — the exact failure
+        // this step exists to prevent.
+        let src_hash = hash_while_copying(entry.path(), &dest)
+            .with_context(|| format!("Could not copy {} to the boot partition", rel.display()))?;
+        let dst_hash = crate::hashing::hash_file(&dest)
+            .with_context(|| format!("Could not re-read {}", dest.display()))?;
+        if src_hash != dst_hash {
+            bail!(
+                "Copy verification failed for {} (content mismatch after write)",
+                rel.display()
+            );
+        }
+
+        let _ = app.emit(
+            "bootloader:progress",
+            serde_json::json!({
+                "stage": "extract",
+                "current": i as u64 + 1,
+                "total": total,
+                "current_item": rel.to_string_lossy(),
+            }),
         );
     }
     Ok(())
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst).with_context(|| format!("Could not create {}", dst.display()))?;
-    for entry in
-        std::fs::read_dir(src).with_context(|| format!("Could not read {}", src.display()))?
-    {
-        let entry = entry?;
-        let dest_path = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_recursive(&entry.path(), &dest_path)?;
-        } else {
-            std::fs::copy(entry.path(), &dest_path)
-                .with_context(|| format!("Could not copy {}", entry.path().display()))?;
+
+/// Copies one file while hashing what was read, returning the source hash.
+/// The caller hashes the destination separately and compares: equal hashes
+/// prove the write is bit-identical, regardless of lengths matching.
+fn hash_while_copying(src: &Path, dst: &Path) -> Result<String> {
+    let mut src_file =
+        std::fs::File::open(src).with_context(|| format!("Cannot open {}", src.display()))?;
+    let out_file =
+        std::fs::File::create(dst).with_context(|| format!("Cannot create {}", dst.display()))?;
+    let mut writer = std::io::BufWriter::new(out_file);
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        let n = src_file
+            .read(&mut buf)
+            .with_context(|| format!("Cannot read {}", src.display()))?;
+        if n == 0 {
+            break;
         }
+        hasher.update(&buf[..n]);
+        writer
+            .write_all(&buf[..n])
+            .with_context(|| format!("Cannot write {}", dst.display()))?;
     }
-    Ok(())
+    writer.flush().with_context(|| format!("Cannot flush {}", dst.display()))?;
+    drop(writer);
+    Ok(hex::encode(hasher.finalize()))
 }
 
-/// Writes the boot partition's own grub.cfg: load the modules needed to read
-/// the exFAT data partition and loopback-mount a file on it, find the ISO by
-/// name, mount it as `(loop)`, then hand off to the ISO's own loopback.cfg
-/// (already copied alongside this file) which expects `$iso_path` to be set.
-fn write_grub_cfg(boot_root: &Path, iso_filename: &str) -> Result<()> {
-    let cfg = format!(
-        "insmod part_msdos\n\
-         insmod fat\n\
-         insmod exfat\n\
-         insmod search\n\
-         insmod search_fs_file\n\
-         insmod loopback\n\
-         insmod iso9660\n\
-         \n\
-         set timeout=10\n\
-         \n\
-         search --no-floppy --file --set=root /{iso}\n\
-         set isofile=\"/{iso}\"\n\
-         loopback loop $isofile\n\
-         set root=(loop)\n\
-         set iso_path=$isofile\n\
-         source /boot/grub/loopback.cfg\n",
-        iso = iso_filename
-    );
-    let cfg_path = boot_root.join("boot").join("grub").join("grub.cfg");
-    std::fs::write(&cfg_path, cfg).context("Could not write grub.cfg")?;
+/// Rejects a single ISO member that FAT32 cannot hold, before any copying.
+/// Boot-partition extraction dies halfway through a multi-GB copy otherwise.
+fn fits_fat32(display: &str, size: u64) -> Result<()> {
+    const FAT32_MAX_FILE: u64 = 4_294_967_295;
+    if size > FAT32_MAX_FILE {
+        bail!(
+            "This OS image contains '{}' ({} bytes), which exceeds FAT32's 4 GB per-file limit. \
+             Ferry cannot make a bootable USB from it by extraction.",
+            display,
+            size
+        );
+    }
     Ok(())
 }
 
@@ -194,7 +234,7 @@ fn run_powershell_script(script: &str, args: &[&str]) -> Result<String> {
         f.flush().context("Could not flush PowerShell script")?;
     }
 
-    let mut cmd = Command::new("powershell");
+    let mut cmd = crate::proc::hidden("powershell");
     cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
     cmd.arg(&path);
     cmd.args(args);
@@ -209,4 +249,50 @@ fn run_powershell_script(script: &str, args: &[&str]) -> Result<String> {
         bail!("PowerShell script failed: {} {}", stdout.trim(), stderr.trim());
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fits_fat32;
+
+    #[test]
+    fn ubuntu_sized_members_pass() {
+        // Real measurement: Ubuntu 24.04.2's largest member is 1.69 GB.
+        assert!(fits_fat32("casper/minimal.squashfs", 1_690_000_000).is_ok());
+    }
+
+    #[test]
+    fn windows_sized_wim_fails_before_copying() {
+        assert!(fits_fat32("sources/install.wim", 4_700_000_000).is_err());
+    }
+
+    #[test]
+    fn exactly_4gib_minus_one_passes() {
+        assert!(fits_fat32("edge.bin", 4_294_967_295).is_ok());
+        assert!(fits_fat32("edge.bin", 4_294_967_296).is_err());
+    }
+
+    #[test]
+    fn copy_hash_round_trip_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("a.bin");
+        let dst = dir.path().join("b.bin");
+        std::fs::write(&src, b"ferry-bootloader-test-content-12345").unwrap();
+        let h1 = super::hash_while_copying(&src, &dst).unwrap();
+        let h2 = crate::hashing::hash_file(&dst).unwrap();
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn corrupted_destination_is_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("a.bin");
+        let dst = dir.path().join("b.bin");
+        std::fs::write(&src, b"original-content-here").unwrap();
+        let h1 = super::hash_while_copying(&src, &dst).unwrap();
+        // Same length, different bytes: the old size check would pass this.
+        std::fs::write(&dst, b"corrupted-content-her").unwrap();
+        let h2 = crate::hashing::hash_file(&dst).unwrap();
+        assert_ne!(h1, h2);
+    }
 }

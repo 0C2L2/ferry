@@ -9,9 +9,8 @@ when it was written.
 
 **Snapshot at time of writing (2026-09-19):** backup/restore engine, encryption,
 inventory, browser/Wi-Fi capture, migration-aware scanning, and cloud (B2)
-upload are implemented and passing `cargo test` (22/22), `clippy -D warnings`,
-and `tsc`. Cloud Backup is free (no tiers/subscription anywhere in the app —
-see `business-model.md`). Windows download (MCT) is cut from this build;
+upload are implemented and passing `cargo test` (27/27), `clippy -D warnings`,
+and `tsc`. Cloud Backup is a paid add-on (one-time per migration — see `business-model.md`); checkout arrives with the accounts launch, and the working flow runs open until then. Windows download (MCT) is cut from this build;
 Ubuntu is the only supported target for now. The bootable-USB blocker below
 has a real implementation as of today, pending a boot test on real hardware
 or a UEFI VM — the one thing that could not be verified inside this session.
@@ -25,10 +24,10 @@ built on a guess here.
 
 | # | Decision | Resolution |
 |---|---|---|
-| D1 | Bootloader source | **Resolved 2026-09-19**: no bundled binary at all. Ferry extracts `/EFI/boot/` and `/boot/grub/` directly from the already-downloaded, checksum-verified OS ISO and writes a small `grub.cfg` that loopback-boots that same ISO from the data partition. The bootloader on the USB is always the OS vendor's own signed one. See Phase 1. |
+| D1 | Bootloader source | **Resolved 2026-09-19, simplified 2026-09-21**: no bundled binary at all. Ferry extracts the whole checksum-verified OS image onto the FAT32 partition, so it boots via the vendor's own signed bootloader with no Ferry-written boot config. (The first version hand-wrote a `grub.cfg` to loopback-boot the intact ISO; measuring the image showed FAT32's 4 GB limit never applied, so that was deleted.) See Phase 1. |
 | D2 | Windows download path for v0.1 | **Resolved 2026-09-19**: cut. Ubuntu-only for this build; Windows entries stay visible in the OS picker but greyed out as "automated download not available in this build" (already implemented in `OSSelect.tsx`) rather than removed, so the gap stays honest instead of hidden. |
 | D3 | Code-signing certificate | Still open — see Phase 4. |
-| D4 | Cloud Backup exposure in v0.1 | **Resolved 2026-09-19**, revised same day: ship it, free, and **Ferry-managed** — the user never creates their own B2 account/bucket/key. Ferry's own B2 master key lives only in `assist-server` (never in the desktop app); the app gets a disposable, backup-scoped credential minted per request. See `business-model.md` and `architecture.md`. |
+| D4 | Cloud Backup exposure in v0.1 | **Resolved 2026-09-19**, revised same day: ship the flow as the paid add-on per `business-model.md` — one-time per migration, checkout with the accounts launch. Ferry's own B2 master key lives only in `assist-server` (never in the desktop app); the app gets a disposable, backup-scoped credential minted per request. See `business-model.md` and `architecture.md`. |
 
 ---
 
@@ -47,35 +46,31 @@ diskpart's `assign` does not guarantee any particular letter) rather than
 reusing the stale pre-partition letter. Backup, Cloud Backup, download, and
 the bootloader step all now write to the returned `data_letter`.
 
-`disk/bootloader.rs` was rewritten to extract the bootloader from the
-downloaded ISO instead of expecting a bundled binary:
+`disk/bootloader.rs` extracts the OS image's entire contents onto the FAT32
+partition, which is sized to the image (OS selection therefore runs *before*
+partitioning). The image ships its own vendor-signed `/EFI/boot/bootx64.efi`
+and `grub.cfg`, so firmware boots it directly and Ferry writes no boot
+configuration of its own. The `.iso` is deleted from the data partition after
+extraction to reclaim the space the backup needs.
 
-1. Mount the ISO already sitting on the data partition (Windows'
-   `Mount-DiskImage`, via a temp `.ps1` file with positional args — never
-   string-interpolated, to keep arbitrary path content from being
-   reinterpreted as script).
-2. Copy `/EFI/boot/` and `/boot/grub/` onto the FAT32 boot partition.
-3. Fail closed with a clear error if `boot/grub/loopback.cfg` isn't present
-   (a different release/flavor could lay out its boot files differently).
-4. Write a `grub.cfg` that loads the `exfat`/`iso9660`/`loopback` modules,
-   `search`es the data partition for the ISO by filename, loopback-mounts it,
-   and `source`s the ISO's own `loopback.cfg` (which expects a `$iso_path`
-   variable — confirmed by inspection, see below).
-5. Always dismount the ISO, even on failure.
+**Superseded design (2026-09-21):** this initially kept the ISO whole on the
+exFAT partition and hand-wrote a `grub.cfg` that loopback-mounted it. That is
+the standard workaround for FAT32's 4 GB per-file limit — but measuring the
+real Ubuntu 24.04.2 ISO showed its largest member is `casper/minimal.squashfs`
+at 1.69 GB. The limit never bound, so the workaround bought nothing while
+costing a hand-written boot config, a dependency on GRUB loading its exFAT
+module, and partition-addressing assumptions — all on the one path that can't
+be verified without rebooting. It was deleted. If a future image does carry a
+>4 GB member, that image needs the loopback path (or Rufus's NTFS +
+UEFI:NTFS shim) and the layout changes with it.
 
-**Verified, not guessed:** the actual `os-sources.json` Ubuntu 24.04.2 ISO
-was downloaded (first 100 MB — the boot metadata lives early in the file)
-and mounted for real during this session. Confirmed present: Canonical-signed
-`bootx64.efi`/`grubx64.efi`/`mmx64.efi` under `/EFI/boot/`, and
-`/boot/grub/loopback.cfg` containing exactly the `${iso_path}`-based
-`casper/vmlinuz` menu entries this code's `grub.cfg` is written to drive.
-`exfat.mod`/`fat.mod` are present among the ISO's own GRUB modules, confirming
-GRUB can read the exFAT data partition once `insmod exfat` runs.
+**Verified, not guessed:** the actual `os-sources.json` Ubuntu 24.04.2 ISO was
+downloaded and mounted during development to confirm both the Canonical-signed
+`/EFI/boot/` binaries and the internal file sizes the design decision rests on.
 
-**What's still unverified:** whether the assembled USB actually boots. This
-requires a real reboot — either a spare machine or a UEFI-enabled VM
-(QEMU/VirtualBox + OVMF firmware; not installed in this environment, so it
-could not be attempted here). Do this before any live demo.
+**What's still unverified:** whether the assembled USB actually boots. That
+needs a real reboot — a spare machine or a UEFI VM (QEMU/VirtualBox + OVMF).
+Do this before any live demo.
 
 **Definition of done:** a freshly-prepared Ubuntu USB boots on at least one
 real UEFI machine or VM and reaches the Ubuntu installer. Windows targets are

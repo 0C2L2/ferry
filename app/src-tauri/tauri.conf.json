@@ -28,7 +28,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "resources": {
+      "resources/ferry-restore": "ferry-restore"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

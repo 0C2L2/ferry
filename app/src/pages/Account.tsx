@@ -9,18 +9,19 @@ interface Props {
   onTabChange: (t: AccountTab) => void;
 }
 
-type Tab = "profile" | "history" | "preferences";
+type Tab = "profile" | "plan" | "history" | "preferences";
 
 export type AccountTab = Tab;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "profile", label: "Profile" },
+  { id: "plan", label: "Plan" },
   { id: "history", label: "History" },
   { id: "preferences", label: "Settings" },
 ];
 
 export function Account({ tab, onTabChange }: Props) {
-  const { account, signUp, signIn, signOut } = useAuth();
+  const { account, plannedTier, setPlannedTier, signUp, signIn, signOut } = useAuth();
   const setTab = onTabChange;
   const [mode, setMode] = useState<"in" | "up">("in");
   const [name, setName] = useState("");
@@ -42,8 +43,8 @@ export function Account({ tab, onTabChange }: Props) {
       <div className="max-w-md mx-auto">
         <h2 className="text-xl font-semibold mb-1">{mode === "up" ? "Create account" : "Sign in"}</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Optional — every Ferry feature, including Cloud Backup, works without an account. This
-          is just a local profile if you'd like one.
+          Optional — every core Ferry feature works without an account. You'll
+          register and sign in when you buy the Cloud Backup add-on.
         </p>
         {error && <ErrorBox message={error} />}
         {mode === "up" && (
@@ -123,8 +124,8 @@ export function Account({ tab, onTabChange }: Props) {
             </div>
           </div>
           <p className="text-sm text-gray-500 mb-4">
-            This profile lives only on this PC and is entirely optional — Ferry doesn't require
-            it for any feature.
+            This profile lives only on this PC and is entirely optional for the
+            free core features — you'll sign in with it when you buy Cloud Backup.
           </p>
           <button
             onClick={signOut}
@@ -132,6 +133,44 @@ export function Account({ tab, onTabChange }: Props) {
           >
             Sign out
           </button>
+        </div>
+      )}
+
+      {tab === "plan" && (
+        <div className="max-w-xl">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <div className="text-sm text-gray-500">Current plan</div>
+            <div className="font-semibold text-lg">Ferry Free</div>
+            <p className="text-sm text-gray-500 mt-1">
+              Core backup & USB tools, free forever. No subscription, no card.
+            </p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+            <div className="text-sm text-gray-500">Cloud Backup (paid add-on)</div>
+            {plannedTier ? (
+              <>
+                <div className="font-medium">
+                  {plannedTier} <span className="text-brand-700">✓ planned</span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Saved preference — shown again at checkout when billing launches.
+                </p>
+                <button
+                  onClick={() => setPlannedTier(null)}
+                  className="mt-3 text-sm text-red-600 hover:text-red-700"
+                >
+                  Remove planned tier
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mt-1">No tier selected.</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  One-time per migration: ~$5 / 50 GB, ~$15 / 200 GB, ~$40 / 1 TB.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       )}
 

@@ -2,9 +2,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppEntry,
-  AppSuggestion,
   BackupLocation,
   BrowserBackup,
+  CustomIsoInfo,
   DriveInfo,
   DriverEntry,
   FileToBackup,
@@ -12,31 +12,29 @@ import type {
   MigrationProfile,
   OsSource,
   RestoreSummary,
-  SandboxVerifyResult,
   ScanResult,
-  ShareLink,
   UsbLayout,
+  WifiProfile,
 } from "./types";
 
-// Ferry Assist: an optional sidecar (see ../assist-server) for AI migration
-// suggestions and Cloud Backup share links. Unset by default — every other
-// Ferry feature works fully offline without it.
+// Ferry's server (../assist-server) mints the scoped keys for Cloud Backup.
+// Unset by default — every other Ferry feature works fully offline without it.
 const ASSIST_SERVER_URL = import.meta.env.VITE_ASSIST_SERVER_URL;
 
 export function isAssistConfigured(): boolean {
   return Boolean(ASSIST_SERVER_URL);
 }
 
-async function assistFetch<T>(path: string, body: unknown): Promise<T> {
-  if (!ASSIST_SERVER_URL) throw new Error("Ferry Assist server is not configured");
-  const res = await fetch(`${ASSIST_SERVER_URL}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? `Ferry Assist returned ${res.status}`);
-  return data as T;
+/** Configured AND answering. Offering Cloud Backup when the server is down
+ *  would only show the user a button that fails with a network error. */
+export async function isCloudReachable(): Promise<boolean> {
+  if (!ASSIST_SERVER_URL) return false;
+  try {
+    const res = await fetch(`${ASSIST_SERVER_URL}/ready`, { signal: AbortSignal.timeout(3000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 export const api = {
@@ -57,16 +55,26 @@ export const api = {
     invoke<void>("encrypt_backup", { usbRoot, password }),
   downloadOs: (sourceId: string, destDir: string) =>
     invoke<string>("download_os_image", { sourceId, destDir }),
-  prepareUsb: (driveLetter: string) => invoke<UsbLayout>("prepare_usb", { driveLetter }),
+  inspectCustomIso: (path: string) =>
+    invoke<CustomIsoInfo>("inspect_custom_iso", { path }),
+  copyCustomIso: (sourcePath: string, destDir: string) =>
+    invoke<string>("copy_custom_iso", { sourcePath, destDir }),
+  prepareUsb: (driveLetter: string, bootMb: number) =>
+    invoke<UsbLayout>("prepare_usb", { driveLetter, bootMb }),
   writeBootloader: (bootLetter: string, dataLetter: string, isoFilename: string) =>
     invoke<void>("write_bootloader", { bootLetter, dataLetter, isoFilename }),
   backupChromium: (usbRoot: string) =>
     invoke<BrowserBackup>("backup_chromium_data", { usbRoot }),
   backupFirefox: (usbRoot: string) =>
     invoke<BrowserBackup>("backup_firefox_data", { usbRoot }),
+  copyRestoreTool: (usbRoot: string) => invoke<void>("copy_restore_tool", { usbRoot }),
   exportWifi: (usbRoot: string) => invoke<number>("export_wifi_profiles", { usbRoot }),
+  listWifiProfiles: (backupRoot: string) =>
+    invoke<WifiProfile[]>("list_wifi_profiles", { backupRoot }),
+  wifiPassword: (backupRoot: string, ssid: string) =>
+    invoke<string>("wifi_password", { backupRoot, ssid }),
   scanApps: () => invoke<AppEntry[]>("scan_installed_apps"),
-  scanDrivers: () => invoke<DriverEntry[]>("scan_drivers"),
+  scanNetworkAdapters: () => invoke<DriverEntry[]>("scan_network_adapters"),
   resolveTiers: (apps: AppEntry[]) => invoke<AppEntry[]>("resolve_app_tiers", { apps }),
   installApp: (wingetId: string) => invoke<string>("install_app", { wingetId }),
   saveInventory: (usbRoot: string, appsJson: string, driversJson: string) =>
@@ -85,11 +93,3 @@ export const api = {
   deleteCloudBackup: (backupId: string) => invoke<void>("delete_cloud_backup", { backupId }),
 };
 
-export const assistApi = {
-  suggestForApps: (apps: Pick<AppEntry, "name" | "publisher" | "tier">[], targetFamily: string) =>
-    assistFetch<{ suggestions: AppSuggestion[] }>("/api/assist/suggest", { apps, targetFamily }),
-  verifyCommand: (command: string) =>
-    assistFetch<SandboxVerifyResult>("/api/assist/verify", { command }),
-  createShareLink: (backupId: string) =>
-    assistFetch<ShareLink>("/api/cloud/share-link", { backupId }),
-};

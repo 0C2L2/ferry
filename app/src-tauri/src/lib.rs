@@ -3,20 +3,38 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod types;
-mod safety;
-mod disk;
-mod backup;
-mod crypto;
-mod download;
-mod inventory;
-mod browser;
-mod wifi;
-mod restore;
-mod cloud;
+// Portable modules — these build for Linux too, which is what lets the
+// `ferry-restore` CLI exist (see src/restore_cli/main.rs). Everything below the
+// cfg(windows) line touches diskpart, the registry, netsh or winget and is
+// Windows-only by nature.
+pub mod crypto;
+pub mod hashing;
+pub mod restore;
+pub mod safety;
+pub mod types;
+pub mod ubuntu;
+pub mod wifi;
 
+#[cfg(windows)]
+mod backup;
+#[cfg(windows)]
+mod browser;
+#[cfg(windows)]
+mod cloud;
+#[cfg(windows)]
+mod disk;
+#[cfg(windows)]
+mod download;
+#[cfg(windows)]
+mod inventory;
+#[cfg(windows)]
+mod proc;
+
+
+#[cfg(all(windows, debug_assertions))]
 use tauri::Manager;
 
+#[cfg(windows)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -29,6 +47,8 @@ pub fn run() {
             if std::env::var_os("FERRY_DEVTOOLS").is_some() {
                 app.get_webview_window("main").unwrap().open_devtools();
             }
+            #[cfg(not(debug_assertions))]
+            let _ = app;
             Ok(())
         })
         // ── Disk ──────────────────────────────────────────────────────────
@@ -48,10 +68,12 @@ pub fn run() {
             crypto::decrypt::decrypt_backup,
             // ── Download ──────────────────────────────────────────────────
             download::fetch::download_os_image,
+            download::custom::inspect_custom_iso,
+            download::custom::copy_custom_iso,
             download::sources::list_os_sources,
             // ── Inventory ─────────────────────────────────────────────────
             inventory::apps::scan_installed_apps,
-            inventory::drivers::scan_drivers,
+            inventory::network::scan_network_adapters,
             inventory::store::scan_store_apps,
             inventory::picker::resolve_app_tiers,
             inventory::picker::install_app,
@@ -63,10 +85,14 @@ pub fn run() {
             // ── Wi-Fi ─────────────────────────────────────────────────────
             wifi::export::export_wifi_profiles,
             wifi::import::import_wifi_profiles,
+            wifi::list::list_wifi_profiles,
+            wifi::list::wifi_password,
+            // ── Ubuntu restore tool on the USB ────────────────────────────
+            backup::restore_tool::copy_restore_tool,
             // ── Restore ───────────────────────────────────────────────────
             restore::detect::find_backup_on_usb,
             restore::copy::restore_files,
-            // ── Cloud Backup ──────────────────────────────────────────────
+            // -- Cloud Backup (managed, free) --
             cloud::b2::upload_backup_b2,
             cloud::b2::download_backup_b2,
             cloud::b2::delete_cloud_backup,

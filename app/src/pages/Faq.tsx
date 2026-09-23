@@ -5,11 +5,11 @@ import { useState } from "react";
 const QA: { q: string; a: string }[] = [
   {
     q: "Do I need an account to use Ferry?",
-    a: "No. Backup, USB creation, OS downloads and restore are free forever with no login wall. An account is only needed for the planned Cloud Backup feature.",
+    a: "No. Backup, USB creation, OS downloads and restore are free forever with no login wall. You only register and sign in if you buy the Cloud Backup add-on.",
   },
   {
     q: "Will I lose my files when my PC is wiped?",
-    a: "Not if you follow the order Ferry enforces: back up → checksum-verify → erase. The erase step stays locked until every backed-up file is verified byte-for-byte against the original.",
+    a: "The USB drive is prepared first, while it holds nothing of yours yet — your PC is never touched by that step. Afterwards every file is copied, checksum-verified, and encrypted before anything else happens. Nothing is erased that hasn't been verified.",
   },
   {
     q: "What happens if I forget my backup password?",
@@ -21,7 +21,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "My USB drive is too small. What now?",
-    a: "In this build you need a bigger drive. The planned Cloud Backup feature will hold the overflow (or a second safety copy) in the cloud for a one-time fee — see Pricing.",
+    a: "Use a larger drive — Ferry tells you the required size before anything is erased. Or buy the Cloud Backup add-on (one-time per migration, priced by backup size — see Pricing): it holds the overflow, or a second safety copy, in the cloud.",
   },
   {
     q: "Are my browser passwords transferred?",
@@ -33,7 +33,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "Is any of my data uploaded to the internet?",
-    a: "No. In this build everything stays between your PC and your USB drive: OS images come straight from vendor servers, and your files never leave the encrypted backup on the stick.",
+    a: "Only if you buy the optional Cloud Backup add-on: then your already-encrypted backup file is uploaded to Ferry's storage — Ferry cannot read it, and it is deleted after you restore. Everything else stays between your PC and your USB drive.",
   },
   {
     q: "Why does Ferry need administrator access?",

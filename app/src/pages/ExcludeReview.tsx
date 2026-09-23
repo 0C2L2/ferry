@@ -57,6 +57,25 @@ export function ExcludeReview({ scan, extraExcludes, roots, onScan, onNext }: Pr
               {scan.skipped_count.toLocaleString()} items skipped (caches, temp files)
             </div>
           </div>
+          {scan.cloud_only_count > 0 && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 mb-4 text-sm">
+              <p className="font-medium mb-1">
+                {scan.cloud_only_count.toLocaleString()} files are stored in the cloud, not on
+                this PC
+              </p>
+              <p>
+                OneDrive keeps them online-only to save space (
+                {formatBytes(scan.cloud_only_bytes)} in total). Ferry can only copy what is
+                actually on the disk, so these would be backed up as empty files.
+              </p>
+              <p className="mt-2">
+                To keep them, open OneDrive in File Explorer, right-click those folders and
+                choose <strong>“Always keep on this device”</strong>, wait for the download to
+                finish, then come back and rescan. Otherwise continue — but decide{" "}
+                <strong>before</strong> the drive is erased.
+              </p>
+            </div>
+          )}
           <div className="flex gap-2 mb-4">
             <input
               value={draft}

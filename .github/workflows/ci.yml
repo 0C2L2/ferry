@@ -7,16 +7,45 @@ on:
 jobs:
   rust:
     runs-on: windows-latest
+    # The Windows app bundles the Linux ferry-restore (tauri.conf.json
+    # resources) and tauri-build refuses to build without it.
+    needs: restore-cli
+    defaults:
+      run:
+        working-directory: app/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ferry-restore-linux-x86_64
+          path: app/src-tauri/resources
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Unit tests
+        run: cargo test --locked
+      - name: Lints
+        run: cargo clippy --locked -- -D warnings
+
+  # The Linux restore CLI. Ferry's GUI is Windows-only, so this binary is the
+  # entire second half of a Windows→Ubuntu migration. It builds on a Linux
+  # runner because cross-compiling it from Windows needs a C toolchain, and is
+  # uploaded so it can be shipped on the USB next to the Windows app.
+  restore-cli:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app/src-tauri
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Unit tests
-        run: cargo test --locked
       - name: Lints
-        run: cargo clippy --locked -- -D warnings
+        run: cargo clippy --locked --features restore-cli --bin ferry-restore -- -D warnings
+      - name: Build
+        run: cargo build --locked --release --features restore-cli --bin ferry-restore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferry-restore-linux-x86_64
+          path: app/src-tauri/target/release/ferry-restore
+          if-no-files-found: error
 
   frontend:
     runs-on: windows-latest

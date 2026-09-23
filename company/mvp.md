@@ -19,7 +19,7 @@ If this person can run Ferry start-to-finish without data loss, the MVP has succ
 ### 1. USB drive preparation
 
 - Detect all connected removable/external drives and list them with model name, capacity, and available space.
-- Partition the USB: a small FAT32 boot partition (~32 MB) and a large exFAT data partition filling the rest.
+- Partition the USB: a FAT32 boot partition sized to the chosen OS image (100 MB floor — below ~33.5 MB, FAT32 cannot be formatted at all) holding the image's extracted contents, and an exFAT data partition filling the rest for the backup.
 - Download the selected OS image directly from the vendor's official server (see §3 below) into the data partition.
 - Write a bootloader to the boot partition so the drive is bootable on UEFI systems.
 - Show real-time progress (download %, write %, estimated time remaining).

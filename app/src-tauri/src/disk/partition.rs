@@ -17,30 +17,35 @@ use std::io::Write;
 /// drive letters diskpart assigned to each new partition — never assume these
 /// match the original `drive_letter`, which is destroyed by `clean`.
 #[tauri::command]
-pub async fn prepare_usb(drive_letter: String) -> Result<UsbLayout, String> {
+pub async fn prepare_usb(drive_letter: String, boot_mb: u32) -> Result<UsbLayout, String> {
     let letter = validate_drive_letter(&drive_letter).map_err(|e| e.to_string())?;
     ensure_removable_drive_letter(letter).map_err(|e| e.to_string())?;
-    partition_drive(letter).await.map_err(|e| e.to_string())
+    partition_drive(letter, boot_mb).await.map_err(|e| e.to_string())
 }
 
-async fn partition_drive(letter: char) -> Result<UsbLayout> {
+/// FAT32 needs at least 65,527 clusters (~33.5 MB at 512-byte sectors), so
+/// anything at or below ~32 MB cannot be formatted at all — Ventoy formats
+/// its similarly-sized partition FAT16 for exactly this reason.
+const MIN_BOOT_MB: u32 = 100;
+/// Guards against a bad size wiping out the space the backup needs; no current
+/// OS image comes close to this.
+const MAX_BOOT_MB: u32 = 32_768;
+
+async fn partition_drive(letter: char, boot_mb: u32) -> Result<UsbLayout> {
+    let boot_mb = boot_mb.clamp(MIN_BOOT_MB, MAX_BOOT_MB);
     // Resolve the disk number from the validated drive letter using PowerShell.
     // Only a single A-Z letter reaches the shell, so no shell injection is possible.
     let disk_number =
         get_disk_number(letter).context("Could not determine disk number for drive letter")?;
     ensure_removable_drive_letter(letter)?;
 
-    // Boot partition is 100 MB, not 32 MB: FAT32 needs at least 65,527
-    // clusters (~33.5 MB at 512-byte sectors), so a 32 MB partition sits right
-    // at/below the floor and `format fs=fat32` fails on it. Ventoy hits the
-    // same wall and formats its ~33 MB VTOYEFI partition as FAT16 for exactly
-    // this reason. 100 MB is the standard EFI System Partition size and is
-    // negligible on any stick large enough to hold an OS image anyway.
+    // The boot partition holds the OS image's *extracted contents*, so it is
+    // sized to the image (see MIN_BOOT_MB for why it can never be tiny).
     let script = format!(
         "select disk {disk}\n\
          clean\n\
          convert mbr\n\
-         create partition primary size=100\n\
+         create partition primary size={boot_mb}\n\
          format fs=fat32 quick label=\"FERRY_BOOT\"\n\
          assign\n\
          create partition primary\n\
@@ -90,7 +95,7 @@ fn get_letter_by_label(label: &str) -> Result<char> {
     // `label` is always one of our own two hardcoded constants above, never
     // renderer input, so interpolating it into the PowerShell command is safe.
     let script = format!("(Get-Volume -FileSystemLabel '{label}').DriveLetter");
-    let output = std::process::Command::new("powershell")
+    let output = crate::proc::hidden("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .context("Failed to run PowerShell")?;
@@ -105,7 +110,7 @@ fn get_letter_by_label(label: &str) -> Result<char> {
 
 fn get_disk_number(letter: char) -> Result<u32> {
     let script = format!("(Get-Partition -DriveLetter '{letter}').DiskNumber");
-    let output = std::process::Command::new("powershell")
+    let output = crate::proc::hidden("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .context("Failed to run PowerShell")?;
@@ -140,7 +145,7 @@ fn run_diskpart_script(script: &str) -> Result<()> {
         path
     };
 
-    let result = std::process::Command::new("diskpart")
+    let result = crate::proc::hidden("diskpart")
         .args(["/s", script_path.to_str().context("Invalid diskpart script path")?])
         .output()
         .context("Failed to run diskpart");

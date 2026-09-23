@@ -72,7 +72,7 @@ async fn build_and_verify_manifest(
                 continue;
             }
         };
-        let source = match ensure_source_under_home(&file.source) {
+        let source = match resolve_source(&file.source, &canonical_usb) {
             Ok(source) => source,
             Err(e) => {
                 failures.push(format!("{}: {}", file.source.display(), e));
@@ -142,6 +142,27 @@ async fn build_and_verify_manifest(
     Ok(manifest)
 }
 
+/// Two kinds of entry reach verification, and they need different rules:
+///
+/// * Files copied from the user's profile — source lives under `%USERPROFILE%`
+///   and is compared against its copy on the USB.
+/// * Files the browser / Wi-Fi / inventory passes wrote straight to the USB
+///   (`list_usb_backup_files` feeds these in) — the source *is* the backup
+///   copy, and it was never under home to begin with.
+///
+/// Applying the under-home check to both kinds failed every USB-resident file,
+/// and since any failure aborts the run, that killed the whole backup at the
+/// Verify stage.
+fn resolve_source(source: &std::path::Path, usb_root: &std::path::Path) -> Result<PathBuf> {
+    if source.starts_with(usb_root) {
+        // Produced by our own walk of the canonical USB root, and the
+        // destination is still checked with `ensure_inside` below.
+        Ok(source.to_path_buf())
+    } else {
+        ensure_source_under_home(source)
+    }
+}
+
 /// Verify one file: both copies readable and identical.
 /// Files that change mid-backup (browser databases, active downloads) get one
 /// re-copy + re-check before being declared failures — transient writes heal,
@@ -204,7 +225,7 @@ pub fn hash_file(path: &std::path::Path) -> Result<String> {
 }
 
 pub(crate) fn get_os_version() -> String {
-    std::process::Command::new("powershell")
+    crate::proc::hidden("powershell")
         .args(["-NoProfile", "-Command",
             "(Get-WmiObject Win32_OperatingSystem).Caption"])
         .output()
@@ -217,6 +238,20 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn usb_resident_files_skip_the_under_home_check() {
+        // Regression: browser/Wi-Fi/inventory files live on the USB, never
+        // under home. Requiring every source to be under home failed all of
+        // them, and one failure aborts the entire backup.
+        let usb = std::path::Path::new("E:\\");
+        let on_usb = std::path::Path::new("E:\\Backup\\WiFi\\net.xml");
+        assert_eq!(resolve_source(on_usb, usb).unwrap(), on_usb.to_path_buf());
+
+        // Anything outside the USB still has to prove it came from home.
+        let elsewhere = std::path::Path::new("C:\\Windows\\System32\\config\\SAM");
+        assert!(resolve_source(elsewhere, usb).is_err());
+    }
 
     #[test]
     fn hash_is_deterministic() {

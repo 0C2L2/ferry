@@ -4,12 +4,17 @@
 /// These helpers validate drive letters, USB roots, relative paths, filenames,
 /// and staging directories before any erase/copy/extract/download happens.
 use anyhow::{bail, Context, Result};
-use std::path::{Component, Path, PathBuf};
-use windows::Win32::Storage::FileSystem::GetDriveTypeW;
+#[cfg(windows)]
+use std::path::Component;
+use std::path::{Path, PathBuf};
+#[cfg(windows)]
 use windows::core::PCWSTR;
+#[cfg(windows)]
+use windows::Win32::Storage::FileSystem::GetDriveTypeW;
 
 /// Win32 DRIVE_REMOVABLE constant (value 2). Not re-exported as a typed
 /// symbol in windows-rs 0.58, so we define it here.
+#[cfg(windows)]
 const DRIVE_REMOVABLE: u32 = 2;
 
 /// The one way Ferry spells a drive root: `E:\`.
@@ -35,6 +40,11 @@ pub fn validate_drive_letter(input: &str) -> Result<char> {
 }
 
 /// Re-check at the OS level that a drive letter is currently removable.
+///
+/// This guards destructive operations (partitioning, erasing), all of which
+/// are Windows-only. The Linux side never erases anything — `ferry-restore`
+/// only reads — so there is no non-Windows counterpart to write.
+#[cfg(windows)]
 pub fn ensure_removable_drive_letter(letter: char) -> Result<()> {
     let drive = format!("{}:\\", letter.to_ascii_uppercase());
     let drive_w: Vec<u16> = drive.encode_utf16().chain(std::iter::once(0)).collect();
@@ -46,6 +56,7 @@ pub fn ensure_removable_drive_letter(letter: char) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
 fn drive_letter_of_path(path: &Path) -> Result<char> {
     match path.components().next() {
         Some(Component::Prefix(prefix)) => match prefix.kind() {
@@ -60,6 +71,7 @@ fn drive_letter_of_path(path: &Path) -> Result<char> {
 
 /// Canonicalize a USB root, confirm it exists, and confirm it is removable.
 /// Returns the canonical path plus its drive letter.
+#[cfg(windows)]
 pub fn validate_usb_root(input: &str) -> Result<(PathBuf, char)> {
     let canonical = PathBuf::from(input)
         .canonicalize()
@@ -137,6 +149,35 @@ pub fn sanitize_filename(input: &str) -> Result<String> {
     Ok(name.to_string())
 }
 
+/// Minimal RFC-4180-style CSV line parser: honours double-quoted fields and
+/// escaped `""` quotes so commas inside names don't shift columns. Shared by
+/// the inventory scanners that parse PowerShell `ConvertTo-Csv` output.
+pub fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut cols = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if in_quotes => {
+                if chars.peek() == Some(&'"') {
+                    chars.next();
+                    current.push('"');
+                } else {
+                    in_quotes = false;
+                }
+            }
+            '"' => in_quotes = true,
+            ',' if !in_quotes => {
+                cols.push(std::mem::take(&mut current));
+            }
+            _ => current.push(c),
+        }
+    }
+    cols.push(current);
+    cols
+}
+
 pub fn is_http_url(url: &str) -> bool {
     let lower = url.trim().to_lowercase();
     (lower.starts_with("http://") || lower.starts_with("https://"))
@@ -166,6 +207,15 @@ pub fn validate_staging_dir(input: &str) -> Result<PathBuf> {
 }
 
 /// Validate a decrypted-backup directory: it must live in temp or on removable media.
+///
+/// On Windows "removable" is checked at the API level, because the same paths
+/// feed operations that can erase a drive. On Linux the only caller is
+/// `ferry-restore`, which exclusively reads — and there is no portable
+/// equivalent of `GetDriveTypeW` (a USB stick shows up as an ordinary mount
+/// under `/media` or `/mnt`). Inventing a heuristic there would be a guess
+/// dressed up as a safety check, so the check is simply that the directory
+/// exists and holds what a Ferry backup holds; `Backup.enc` is authenticated
+/// by AES-GCM regardless of where it was read from.
 pub fn validate_backup_dir(input: &str) -> Result<PathBuf> {
     let canonical = PathBuf::from(input)
         .canonicalize()
@@ -176,8 +226,12 @@ pub fn validate_backup_dir(input: &str) -> Result<PathBuf> {
     if canonical.starts_with(&temp_canon) {
         return Ok(canonical);
     }
-    let letter = drive_letter_of_path(&canonical)?;
-    ensure_removable_drive_letter(letter)?;
+
+    #[cfg(windows)]
+    {
+        let letter = drive_letter_of_path(&canonical)?;
+        ensure_removable_drive_letter(letter)?;
+    }
     Ok(canonical)
 }
 
@@ -220,5 +274,21 @@ mod tests {
         assert!(sanitize_filename("..").is_err());
         assert!(sanitize_filename("a/b.iso").is_err());
         assert!(sanitize_filename("x?.iso").is_err());
+    }
+
+    #[test]
+    fn csv_parser_handles_quoted_commas() {
+        let cols = parse_csv_line(
+            "\"srv\",\"Print, Spooler\",\"Manages, printing\",\"Kernel\",\"Auto\",\"Running\",\"OK\"",
+        );
+        assert_eq!(cols.len(), 7);
+        assert_eq!(cols[1], "Print, Spooler");
+        assert_eq!(cols[2], "Manages, printing");
+    }
+
+    #[test]
+    fn csv_parser_handles_escaped_quotes() {
+        let cols = parse_csv_line("\"a\",\"b \"\"quoted\"\" c\",\"d\"");
+        assert_eq!(cols[1], "b \"quoted\" c");
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, isAssistConfigured } from "../api";
 import { ErrorBox } from "../components/ErrorBox";
 import type { BackupLocation } from "../types";
 
@@ -129,12 +129,14 @@ export function RestoreDetect({ onFound }: Props) {
           </button>
         </>
       )}
-      <button
-        onClick={() => setFromCloud(true)}
-        className="mt-4 block text-sm text-brand-700 hover:text-brand-600"
-      >
-        Lost your USB? Restore from Ferry Cloud instead →
-      </button>
+      {isAssistConfigured() && (
+        <button
+          onClick={() => setFromCloud(true)}
+          className="mt-4 block text-sm text-brand-700 hover:text-brand-600"
+        >
+          Lost your USB? Restore from Ferry Cloud instead →
+        </button>
+      )}
     </div>
   );
 }

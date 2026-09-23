@@ -7,10 +7,15 @@ Modern OS install images (especially Windows) often contain a single file over 4
 - **Rufus's approach**: a large NTFS partition holding the actual OS files, plus a small FAT32 partition at the end containing a bootloader (UEFI:NTFS) whose only job is letting FAT32-only firmware jump into the NTFS partition.
 - **Ventoy's approach**: a small hidden boot partition, plus one large partition (exFAT by default, reformattable) that holds ISO files directly and uncompressed — Ventoy's own bootloader reads inside the ISO at boot time, so there's no 4 GB ceiling at all.
 
-Ferry's planned layout follows Ventoy's shape, reused for two jobs at once:
+Ferry's layout is closer to Rufus's "ISO Image mode" than to Ventoy's:
 
-- **Partition 1 (boot)**: ~32 MB, FAT32. Holds the bootloader only.
-- **Partition 2 (data)**: the remainder, exFAT. Holds the OS image (`.iso`), the `Backup/` folder with the user's personal files, and the Ferry portable `.exe` — all side by side.
+- **Partition 1 (boot)**: FAT32, sized to the chosen OS image plus ~15% headroom. Holds the image's **extracted contents**, so the vendor's own signed `/EFI/boot/bootx64.efi` and `grub.cfg` boot directly. Ferry writes no boot configuration of its own. (Floor of 100 MB: FAT32 needs ~33.5 MB minimum, so a 32 MB partition cannot be formatted at all — Ventoy uses FAT16 at that size for the same reason.)
+- **Partition 2 (data)**: the remainder, exFAT. Holds the `Backup/` folder (later `Backup.enc` + `backup.salt`) and the Ferry portable `.exe`.
+
+The `.iso` is downloaded to the data partition, extracted onto the boot partition, then deleted — it would otherwise waste several GB the backup needs.
+
+> [!NOTE]
+> **Why not keep the ISO whole and loopback-boot it?** That is the standard dodge for FAT32's 4 GB per-file limit, and Ferry did it that way initially. Measuring the real Ubuntu 24.04.2 ISO showed its largest member is `casper/minimal.squashfs` at 1.69 GB — the limit never bound. The loopback scheme cost a hand-written `grub.cfg`, a dependency on GRUB loading its exFAT module, and partition-addressing assumptions, all on the one code path that cannot be verified without rebooting. Plain extraction removes all of it. If a future image *does* carry a >4 GB member, that image needs the loopback path (or NTFS + a UEFI:NTFS shim, as Rufus does) and the layout has to change with it.
 
 > [!NOTE]
 > exFAT is chosen for Partition 2 because it is natively supported on Windows, macOS, and modern Linux kernels, has no 4 GB file-size ceiling, and is readable by most PC firmware without extra drivers.
@@ -31,7 +36,7 @@ Byte-copying installed programs from one Windows install to another is unreliabl
 
 ## Cloud backup (overflow and Extra Careful)
 
-When personal data exceeds what's left on the USB after the OS image is written, or when the user wants a second encrypted cloud copy alongside the USB, Ferry offers Cloud Backup. It is **free** — see [`business-model.md`](business-model.md) — hosted on Ferry's own Backblaze B2 account. As of 2026-09-19 this is **Ferry-managed**, not bring-your-own-B2: the user never creates an account, a bucket, or a key. They get back a single opaque backup ID (a UUID) to write down alongside their password.
+When personal data exceeds what's left on the USB after the OS image is written, or when the user wants a second encrypted cloud copy alongside the USB, Ferry offers Cloud Backup — the one paid feature (see [`business-model.md`](business-model.md)). It is hosted on Ferry's own Backblaze B2 account: **Ferry-managed**, not bring-your-own-B2. The user registers and signs in (no bucket or key to create), and gets back a single opaque backup ID (a UUID) to write down alongside their password.
 
 **Why the desktop app never holds Ferry's B2 master key:** a distributed desktop binary can always have embedded secrets extracted from it (`strings`, a decompiler). If the app carried Ferry's real B2 credentials, every install would effectively leak them, and anyone could run up storage costs, fill the bucket with junk, or touch other users' data. So the master key lives only in `assist-server` (see `assist-server/src/services/b2admin.ts`), and the desktop app talks to that sidecar instead of to B2 directly for credentials.
 

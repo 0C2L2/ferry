@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, CircleHelp, RotateCcw, Tags, UserRound, Usb } from "lucide-react";
-import { api } from "./api";
+import { api, isCloudReachable } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import { Welcome } from "./pages/Welcome";
 import { DriveSelect } from "./pages/DriveSelect";
@@ -23,6 +23,7 @@ import { CloudUpload } from "./pages/CloudUpload";
 import { recordBackup, recordRestore } from "./history";
 import type {
   BackupLocation,
+  CustomIso,
   DriveInfo,
   Manifest,
   OsSource,
@@ -50,9 +51,9 @@ type Step =
 
 const BACKUP_BACK: Partial<Record<Step, Step>> = {
   drives: "welcome",
-  partition: "drives",
-  os: "partition",
-  plan: "os",
+  os: "drives",
+  partition: "os",
+  plan: "partition",
   excludes: "plan",
   password: "excludes",
 };
@@ -75,6 +76,7 @@ function Shell() {
   const [drive, setDrive] = useState<DriveInfo | null>(null);
   const [usbLayout, setUsbLayout] = useState<UsbLayout | null>(null);
   const [os, setOs] = useState<OsSource | null>(null);
+  const [customIso, setCustomIso] = useState<CustomIso | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [excludes, setExcludes] = useState<string[]>([]);
   const [roots, setRoots] = useState<string[]>([]);
@@ -93,6 +95,7 @@ function Shell() {
     setDrive(null);
     setUsbLayout(null);
     setOs(null);
+    setCustomIso(null);
     setScan(null);
     setExcludes([]);
     setRoots([]);
@@ -202,19 +205,26 @@ function Shell() {
           <Welcome onBackup={() => setStep("drives")} onRestore={() => setStep("restore-detect")} />
         )}
         {view === "wizard" && step === "drives" && (
-          <DriveSelect selected={drive} onSelect={setDrive} onNext={() => setStep("partition")} />
-        )}
-        {view === "wizard" && step === "partition" && drive && (
-          <PartitionUsb
-            drive={drive}
-            onDone={layout => {
-              setUsbLayout(layout);
-              setStep("os");
-            }}
-          />
+          <DriveSelect selected={drive} onSelect={setDrive} onNext={() => setStep("os")} />
         )}
         {view === "wizard" && step === "os" && (
-          <OSSelect selected={os} onSelect={setOs} onNext={() => setStep("plan")} />
+          <OSSelect
+            selected={os}
+            custom={customIso}
+            onSelect={setOs}
+            onCustom={setCustomIso}
+            onNext={() => setStep("partition")}
+          />
+        )}
+        {view === "wizard" && step === "partition" && drive && os && (
+          <PartitionUsb
+            drive={drive}
+            os={os}
+            onDone={layout => {
+              setUsbLayout(layout);
+              setStep("plan");
+            }}
+          />
         )}
         {view === "wizard" && step === "plan" && os && (
           <MigrationPlan
@@ -264,7 +274,10 @@ function Shell() {
                   bytes: m.files.reduce((sum, f) => sum + f.size_bytes, 0),
                 });
               }
-              setStep("cloud"); // offer Extra Careful cloud upload first
+              // Cloud Backup runs through Ferry's server, so it is only
+              // offered when that server actually answers — otherwise the
+              // screen could only show a button that fails.
+              isCloudReachable().then(ok => setStep(ok ? "cloud" : "download"));
             }}
           />
         )}
@@ -279,6 +292,7 @@ function Shell() {
           <DownloadProgress
             dataRoot={usbLayout.data_letter}
             os={os}
+            customIso={customIso}
             onDone={filename => {
               setIsoFilename(filename);
               setStep("bootloader");

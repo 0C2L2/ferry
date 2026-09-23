@@ -22,6 +22,37 @@ pub struct ScanResult {
     pub total_bytes: u64,
     pub skipped_count: usize,
     pub skipped_reasons: Vec<(String, String)>, // (path, reason)
+    /// Files whose contents live in the cloud rather than on this disk
+    /// (OneDrive Files On-Demand). They stay in `files` — they are the user's
+    /// files and silently dropping them would be worse — but the UI must warn
+    /// before the wipe, because copying a placeholder yields a file with the
+    /// right name and no contents.
+    pub cloud_only_count: usize,
+    pub cloud_only_bytes: u64,
+}
+
+/// `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` — set on OneDrive "files on-demand"
+/// placeholders whose data is fetched from the cloud on first read.
+const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x0040_0000;
+/// `FILE_ATTRIBUTE_RECALL_ON_OPEN` — the "online-only" variant.
+const FILE_ATTRIBUTE_RECALL_ON_OPEN: u32 = 0x0004_0000;
+/// `FILE_ATTRIBUTE_OFFLINE` — contents are not immediately available.
+const FILE_ATTRIBUTE_OFFLINE: u32 = 0x0000_1000;
+
+/// True when a file's bytes are not actually on this disk.
+///
+/// Windows 11 enables OneDrive Files On-Demand by default. Explorer shows a
+/// placeholder at its full size, so a naive backup reports success while
+/// copying nothing — and the user finds out only after the drive is wiped.
+/// Ferry exists to prevent exactly that, so this is detected and surfaced
+/// rather than left to chance.
+fn is_cloud_placeholder(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes()
+        & (FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            | FILE_ATTRIBUTE_RECALL_ON_OPEN
+            | FILE_ATTRIBUTE_OFFLINE)
+        != 0
 }
 
 /// Default folder/file patterns that are always excluded.
@@ -79,8 +110,15 @@ pub fn scan_roots(
             let canon = PathBuf::from(root)
                 .canonicalize()
                 .with_context(|| format!("Selected folder does not exist: {root}"))?;
-            crate::safety::ensure_inside(&home_canon, &canon)
-                .with_context(|| format!("Selected folder is outside your profile: {root}"))?;
+            // Inside the profile, or a folder the user explicitly ticked from
+            // elsewhere on disk. The old rule was profile-only, which meant a
+            // project kept in C:\AI could not be backed up at all — and the
+            // user was never told, so it vanished with the wipe.
+            if crate::safety::ensure_inside(&home_canon, &canon).is_err() {
+                crate::backup::paths::ensure_selectable_outside_profile(&canon).with_context(
+                    || format!("Selected folder cannot be backed up: {root}"),
+                )?;
+            }
             walk_roots.push(canon);
         }
     }
@@ -88,6 +126,8 @@ pub fn scan_roots(
     let mut files = Vec::new();
     let mut total_bytes: u64 = 0;
     let mut skipped_reasons: Vec<(String, String)> = Vec::new();
+    let mut cloud_only_count: usize = 0;
+    let mut cloud_only_bytes: u64 = 0;
 
     for root in &walk_roots {
         for entry in WalkDir::new(root)
@@ -108,7 +148,12 @@ pub fn scan_roots(
                 continue;
             }
 
-            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            let metadata = entry.metadata().ok();
+            let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+            if metadata.as_ref().is_some_and(is_cloud_placeholder) {
+                cloud_only_count += 1;
+                cloud_only_bytes += size;
+            }
             let relative = normalise_path(&path, &home_canon);
 
             total_bytes += size;
@@ -121,6 +166,8 @@ pub fn scan_roots(
         total_bytes,
         skipped_count: skipped_reasons.len(),
         skipped_reasons,
+        cloud_only_count,
+        cloud_only_bytes,
     })
 }
 

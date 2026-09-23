@@ -20,14 +20,15 @@ fn run_export(usb_root: PathBuf) -> Result<u32> {
 
     // netsh wlan export profile exports all profiles as separate XML files.
     // key=clear includes the plaintext network key in the XML.
-    let output = std::process::Command::new("netsh")
-        .args([
-            "wlan",
-            "export",
-            "profile",
-            &format!("folder={}", wifi_dir.to_string_lossy()),
-            "key=clear",
-        ])
+    // Run netsh INSIDE the folder and export to "." — never pass the absolute
+    // path. netsh builds each output path in a fixed ~128-char buffer: with a
+    // long folder it silently truncates, writes every profile to the SAME
+    // truncated filename (each overwriting the last), and still prints
+    // "saved successfully". Verified on Windows 11 build 26200: a 126-char
+    // folder turned two profiles into one file named "…\wifit.xml".
+    let output = crate::proc::hidden("netsh")
+        .current_dir(&wifi_dir)
+        .args(["wlan", "export", "profile", "folder=.", "key=clear"])
         .output()
         .context("Failed to run netsh wlan export")?;
     if !output.status.success() {
@@ -77,9 +78,9 @@ fn write_password_sheet(wifi_dir: &std::path::Path) -> Result<()> {
     for path in xmls {
         let xml = std::fs::read_to_string(&path)
             .with_context(|| format!("Cannot read {}", path.display()))?;
-        let ssid = tag_contents(&xml, "name").unwrap_or_else(|| "(unknown)".to_string());
-        let security = tag_contents(&xml, "authentication").unwrap_or_else(|| "unknown".to_string());
-        let password = tag_contents(&xml, "keyMaterial")
+        let ssid = crate::wifi::profile::tag_contents(&xml, "name").unwrap_or_else(|| "(unknown)".to_string());
+        let security = crate::wifi::profile::tag_contents(&xml, "authentication").unwrap_or_else(|| "unknown".to_string());
+        let password = crate::wifi::profile::tag_contents(&xml, "keyMaterial")
             .filter(|k| !k.is_empty())
             .unwrap_or_else(|| "(none — open network)".to_string());
         entries.push((ssid, security, password));
@@ -98,45 +99,6 @@ fn write_password_sheet(wifi_dir: &std::path::Path) -> Result<()> {
     std::fs::write(wifi_dir.join("WiFi-Passwords.txt"), sheet)
         .context("Cannot write WiFi-Passwords.txt")?;
     Ok(())
-}
-
-fn tag_contents(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{}>", tag);
-    let close = format!("</{}>", tag);
-    let start = xml.find(&open)? + open.len();
-    let end = xml[start..].find(&close)?;
-    Some(decode_entities(xml[start..start + end].trim()))
-}
-
-fn decode_entities(s: &str) -> String {
-    s.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SAMPLE: &str = r#"<?xml version="1.0"?>
-<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-    <name>Caf&amp; Bar</name>
-    <MSM><security><authEncryption>
-        <authentication>WPA2PSK</authentication>
-        <sharedKey><keyType>passPhrase</keyType>
-        <keyMaterial>hunter2</keyMaterial></sharedKey>
-    </authEncryption></security></MSM>
-</WLANProfile>"#;
-
-    #[test]
-    fn profile_fields_parse() {
-        assert_eq!(tag_contents(SAMPLE, "name").as_deref(), Some("Caf& Bar"));
-        assert_eq!(tag_contents(SAMPLE, "authentication").as_deref(), Some("WPA2PSK"));
-        assert_eq!(tag_contents(SAMPLE, "keyMaterial").as_deref(), Some("hunter2"));
-        assert!(tag_contents(SAMPLE, "nope").is_none());
-    }
 }
 
 fn xml_file_names(dir: &std::path::Path) -> std::collections::HashSet<String> {

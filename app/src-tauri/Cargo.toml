@@ -2,6 +2,7 @@
 name = "ferry"
 version = "0.1.0"
 edition = "2021"
+default-run = "ferry"
 
 [lib]
 name = "ferry_lib"
@@ -17,26 +18,36 @@ path = "src/main.rs"
 # 740)" while running zero actual tests.
 test = false
 
-[build-dependencies]
+# The Linux-side restore tool. Ferry itself is Windows-only (diskpart, registry,
+# netsh, winget), so once the user installs Ubuntu the GUI cannot run at all —
+# this small CLI ships on the USB and is the only way the second half of a
+# Windows→Ubuntu migration happens. It shares the crypto and restore code with
+# the app rather than reimplementing the container format, because two parsers
+# of one encryption format is how silent corruption ships.
+[[bin]]
+name = "ferry-restore"
+path = "src/restore_cli/main.rs"
+test = false
+# Only built on purpose (Docker/CI Linux build), so a Windows `tauri build`
+# doesn't also package a useless Windows copy into the installer.
+required-features = ["restore-cli"]
+
+[features]
+restore-cli = []
+
+[target.'cfg(windows)'.build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# Shared by the Windows app and the Linux restore CLI. Anything that only the
+# GUI or an OS integration needs belongs in the cfg(windows) block below —
+# keeping it out of here is what lets ferry-restore cross-compile with no C
+# toolchain (reqwest's TLS stack alone pulls in `ring`).
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-shell = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-tokio = { version = "1", features = ["full"] }
-# rustls-tls avoids a native OpenSSL dependency on Windows
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
-
 sha2 = "0.10"
-sha1 = "0.10"
 hex = "0.4"
-urlencoding = "2"
 
 aes-gcm = "0.10"
 # argon2 0.5 with the password-hash feature exposes SaltString
@@ -44,7 +55,33 @@ argon2 = { version = "0.5", features = ["std"] }
 rand = "0.8"
 
 walkdir = "2"
-zip = { version = "2", features = ["deflate"] }
+# default-features = false drops bzip2/zstd/lzma, which pull in C libraries
+# Ferry never uses — its container is always deflate. Removing them also lets
+# the Linux `ferry-restore` target build without a C cross-compiler.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+tempfile = "3"
+zeroize = "1"
+
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+rpassword = "7"
+
+# Windows-only: the GUI shell and every OS-integration crate. Gated so the
+# library still compiles for Linux, which is what lets `ferry-restore` exist.
+[target.'cfg(windows)'.dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+tokio = { version = "1", features = ["full"] }
+# rustls-tls avoids a native OpenSSL dependency on Windows
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+
+sha1 = "0.10"
+urlencoding = "2"
 
 winreg = "0.52"
 windows = { version = "0.58", features = [
@@ -54,12 +91,6 @@ windows = { version = "0.58", features = [
   # Win32_System_WindowsProgramming is NOT needed — DRIVE_REMOVABLE is
   # defined as a bare u32 constant in Win32_Storage_FileSystem.
 ] }
-
-tempfile = "3"
-zeroize = "1"
-
-anyhow = "1"
-chrono = { version = "0.4", features = ["serde"] }
 
 [profile.release]
 opt-level = "z"

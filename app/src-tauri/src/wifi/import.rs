@@ -36,12 +36,18 @@ fn run_import(backup_root: PathBuf) -> Result<(u32, u32)> {
             continue;
         }
 
-        let result = std::process::Command::new("netsh")
+        // Relative filename from inside the folder: netsh truncates long
+        // absolute paths (see export.rs) and then reports "not found".
+        let Some(file_name) = path.file_name() else {
+            continue;
+        };
+        let result = crate::proc::hidden("netsh")
+            .current_dir(&wifi_dir)
             .args([
                 "wlan",
                 "add",
                 "profile",
-                &format!("filename={}", path.to_string_lossy()),
+                &format!("filename={}", file_name.to_string_lossy()),
             ])
             .output();
 

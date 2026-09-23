@@ -34,7 +34,7 @@ async fn install(winget_id: &str) -> Result<String> {
     {
         anyhow::bail!("Refusing to install: invalid winget package ID");
     }
-    let output = tokio::process::Command::new("winget")
+    let output = crate::proc::hidden_async("winget")
         .args([
             "install",
             "--id",
@@ -137,7 +137,7 @@ mod tests {
 /// Run `winget search --name "<name>" --exact --accept-source-agreements`
 /// and return the package ID if exactly one match is found.
 async fn winget_lookup(name: &str) -> Option<String> {
-    let output = tokio::process::Command::new("winget")
+    let output = crate::proc::hidden_async("winget")
         .args([
             "search",
             "--name", name,

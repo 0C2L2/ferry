@@ -41,10 +41,12 @@ Electron is ruled out: its binary size (150+ MB) makes the "portable exe on USB"
 | `argon2` | Password-based key derivation (user password → AES key) |
 | `serde` / `serde_json` | JSON serialization for `manifest.json`, `apps.json`, `drivers.json` |
 | `walkdir` | Recursive directory traversal for backup scanning |
-| `rusqlite` | Read browser `Login Data` (Chrome) and `places.sqlite` (Firefox) SQLite files |
-| `zip` | ZIP container for encrypted backup archive |
+| `zip` (deflate only, no C deps) | ZIP layer inside the encrypted container; cross-buildable |
 | `winreg` | Windows registry access (app inventory) |
-| `indicatif` | Progress tracking (feeds into frontend via Tauri events) |
+| `zeroize` | Wipe AES keys from memory after use |
+| `tempfile` | Atomic temp files (diskpart scripts, staging) |
+| `rpassword` | Password prompt for the Linux restore CLI |
+| `sha1` + `urlencoding` | B2 upload integrity + filename encoding |
 
 ### Frontend (npm)
 
@@ -55,7 +57,7 @@ Electron is ruled out: its binary size (150+ MB) makes the "portable exe on USB"
 | `tailwindcss` | Utility-first CSS |
 | `@tauri-apps/api` | IPC bridge to Rust backend |
 | `lucide-react` | Icons |
-| `react-router-dom` | Page/step navigation |
+| `@tauri-apps/plugin-dialog` / `-fs` / `-shell` | Native dialogs, fs, and (open-URL-only) shell access |
 
 ---
 
@@ -63,103 +65,100 @@ Electron is ruled out: its binary size (150+ MB) makes the "portable exe on USB"
 
 ```
 ferry/
-├── app/
-│   ├── src-tauri/                  # Rust backend
-│   │   ├── Cargo.toml
-│   │   ├── build.rs                # Embeds the requireAdministrator manifest
-│   │   ├── tauri.conf.json
-│   │   ├── windows-app-manifest.xml# UAC elevation (diskpart needs admin)
-│   │   └── src/
-│   │       ├── main.rs             # Thin entry point; calls ferry_lib::run()
-│   │       ├── lib.rs              # Tauri builder + command registry
-│   │       ├── safety.rs           # Trust boundary: path/letter/filename validation
-│   │       ├── types.rs            # Shared serde types (DriveInfo, UsbLayout, Manifest…)
-│   │       ├── disk/
-│   │       │   ├── enumerate.rs    # List removable drives (model, size, free space)
-│   │       │   ├── partition.rs    # FAT32 boot + exFAT data via diskpart
-│   │       │   └── bootloader.rs   # Extract boot files from the downloaded ISO
-│   │       ├── backup/
-│   │       │   ├── scan.rs         # Walk selected roots, apply excludes
-│   │       │   ├── paths.rs        # Migration profile: measure folders, OS matrix
-│   │       │   ├── copy.rs         # Chunked copy to USB
-│   │       │   └── checksum.rs     # SHA-256 manifest + verify
-│   │       ├── crypto/
-│   │       │   ├── keygen.rs       # Argon2id key derivation
-│   │       │   ├── stream.rs       # Chunked AES-256-GCM container
-│   │       │   ├── encrypt.rs      # Backup/ → Backup.enc (+ backup.salt)
-│   │       │   └── decrypt.rs      # Backup.enc → staging Backup/
-│   │       ├── download/
-│   │       │   ├── sources.rs      # os-sources.json manifest resolution
-│   │       │   └── fetch.rs        # Resumable download + checksum verify
-│   │       ├── inventory/
-│   │       │   ├── apps.rs         # Registry uninstall keys
-│   │       │   ├── store.rs        # Get-AppxPackage (Store apps)
-│   │       │   ├── drivers.rs      # driverquery + pnputil
-│   │       │   ├── picker.rs       # Three-tier resolution + winget install
-│   │       │   └── save.rs         # apps.json / drivers.json read+write
-│   │       ├── browser/
-│   │       │   ├── chrome.rs       # Chromium-family profiles (all profiles)
-│   │       │   └── firefox.rs      # places.sqlite + logins.json + key4.db
-│   │       ├── wifi/
-│   │       │   ├── export.rs       # netsh wlan export profile
-│   │       │   └── import.rs       # netsh wlan add profile (at restore)
-│   │       ├── cloud/
-│   │       │   ├── b2.rs           # Managed B2 upload/download/delete
-│   │       │   └── progress.rs     # Cloud progress event payload
-│   │       └── restore/
-│   │           ├── detect.rs       # Find Backup.enc on a removable drive
-│   │           └── copy.rs         # Verify → copy to Restored/ + summary
-│   │
-│   ├── src/                        # React frontend
-│   │   ├── main.tsx
-│   │   ├── App.tsx                 # Wizard step machine + sidebar nav
-│   │   ├── api.ts                  # Typed wrappers: Tauri commands + assist-server
-│   │   ├── types.ts                # Shapes mirroring the Rust serde output
-│   │   ├── auth.tsx                # Optional local-only profile
-│   │   ├── history.ts             # Local backup/restore journal
-│   │   ├── pages/
-│   │   │   ├── Welcome.tsx         # First-run onboarding, Windows license note
-│   │   │   ├── DriveSelect.tsx     # USB drive picker (model, size, free space)
-│   │   │   ├── PartitionUsb.tsx    # Erase confirmation + partition (runs FIRST)
-│   │   │   ├── OSSelect.tsx        # OS picker (Ubuntu; Windows greyed out)
-│   │   │   ├── MigrationPlan.tsx   # Folder selection sized by source→target OS
-│   │   │   ├── ExcludeReview.tsx   # Review/modify the backup exclude list
-│   │   │   ├── PasswordSetup.tsx   # Encryption password + write-it-down gate
-│   │   │   ├── BackupProgress.tsx  # copy → browser → Wi-Fi → inventory → verify → encrypt
-│   │   │   ├── CloudUpload.tsx     # Optional free managed cloud backup
-│   │   │   ├── DownloadProgress.tsx# OS download + checksum
-│   │   │   ├── BootloaderProgress.tsx # Install boot files from the ISO
-│   │   │   ├── Done.tsx            # "Remove USB and boot from it" instructions
-│   │   │   ├── RestoreDetect.tsx   # Detect USB backup, or restore from cloud
-│   │   │   ├── RestoreProgress.tsx # decrypt → verify → copy → Wi-Fi
-│   │   │   ├── AppPicker.tsx       # App + driver reinstall checklist (+ AI assist)
-│   │   │   ├── Pricing.tsx         # Everything is free
-│   │   │   ├── Faq.tsx
-│   │   │   ├── Account.tsx         # Profile / History / Settings tabs
-│   │   │   ├── MyFiles.tsx         # Backup/restore history
-│   │   │   └── Settings.tsx
-│   │   ├── components/
-│   │   │   ├── ProgressBar.tsx     # ProgressBar + StageList
-│   │   │   └── ErrorBox.tsx        # Plain message + collapsible technical detail
-│   │   └── hooks/
-│   │       └── useTauriProgress.ts # Subscribe to Tauri progress events
-│   │
-│   ├── os-sources.json             # Data-driven OS source manifest
-│   ├── tech-plan.md                # This document
-│   ├── test-plan.md                # Manual test cases
-│   └── migration-scan-plan.md      # Migration-aware scanning design
-│
-├── assist-server/                  # Optional Node sidecar (see company/sponsor-integrations.md)
-│   └── src/
-│       ├── index.ts                # Express routes
-│       └── services/
-│           ├── b2admin.ts          # Mints scoped, disposable B2 keys
-│           ├── nosana.ts           # Decentralized LLM inference
-│           ├── daytona.ts          # Sandboxed command verification
-│           └── dnsimple.ts         # Share-link subdomain provisioning
-│
-├── company/                        # Product & planning docs
-└── README.md
++-- app/
+|   +-- src-tauri/                  # Rust backend
+|   |   +-- Cargo.toml
+|   |   +-- build.rs                # Embeds the requireAdministrator manifest
+|   |   +-- tauri.conf.json
+|   |   +-- windows-app-manifest.xml# UAC elevation (diskpart needs admin)
+|   |   +-- src/
+|   |       +-- main.rs             # Thin entry point; calls ferry_lib::run()
+|   |       +-- lib.rs              # Tauri builder + command registry
+|   |       +-- safety.rs           # Trust boundary: path/letter/filename validation
+|   |       +-- types.rs            # Shared serde types (DriveInfo, UsbLayout, Manifest…)
+|   |       +-- disk/
+|   |       |   +-- enumerate.rs    # List removable drives (model, size, free space)
+|   |       |   +-- partition.rs    # FAT32 boot + exFAT data via diskpart
+|   |       |   +-- bootloader.rs   # Extract boot files from the downloaded ISO
+|   |       +-- backup/
+|   |       |   +-- scan.rs         # Walk selected roots, apply excludes
+|   |       |   +-- paths.rs        # Migration profile: measure folders, OS matrix
+|   |       |   +-- copy.rs         # Chunked copy to USB
+|   |       |   +-- checksum.rs     # SHA-256 manifest + verify
+|   |       +-- crypto/
+|   |       |   +-- keygen.rs       # Argon2id key derivation
+|   |       |   +-- stream.rs       # Chunked AES-256-GCM container
+|   |       |   +-- encrypt.rs      # Backup/ → Backup.enc (+ backup.salt)
+|   |       |   +-- decrypt.rs      # Backup.enc → staging Backup/
+|   |       +-- download/
+|   |       |   +-- sources.rs      # os-sources.json manifest resolution
+|   |       |   +-- fetch.rs        # Resumable download + checksum verify
+|   |       +-- inventory/
+|   |       |   +-- apps.rs         # Registry uninstall keys
+|   |       |   +-- store.rs        # Get-AppxPackage (Store apps)
+ |   |       |   +-- network.rs      # Network-adapter preflight (connectivity only)
+|   |       |   +-- picker.rs       # Three-tier resolution + winget install
+|   |       |   +-- save.rs         # apps.json / drivers.json read+write
+|   |       +-- browser/
+|   |       |   +-- chrome.rs       # Chromium-family profiles (all profiles)
+|   |       |   +-- firefox.rs      # places.sqlite + logins.json + key4.db
+|   |       +-- wifi/
+|   |       |   +-- export.rs       # netsh wlan export profile
+|   |       |   +-- import.rs       # netsh wlan add profile (at restore)
+|   |       +-- cloud/
+|   |       |   +-- b2.rs           # Managed B2 upload/download/delete
+|   |       |   +-- progress.rs     # Cloud progress event payload
+|   |       +-- restore/
+|   |           +-- detect.rs       # Find Backup.enc on a removable drive
+|   |           +-- copy.rs         # Verify → copy to Restored/ + summary
+|   |
+|   +-- src/                        # React frontend
+|   |   +-- main.tsx
+|   |   +-- App.tsx                 # Wizard step machine + sidebar nav
+|   |   +-- api.ts                  # Typed wrappers: Tauri commands + assist-server
+|   |   +-- types.ts                # Shapes mirroring the Rust serde output
+|   |   +-- auth.tsx                # Optional local-only profile
+|   |   +-- history.ts             # Local backup/restore journal
+|   |   +-- pages/
+|   |   |   +-- Welcome.tsx         # First-run onboarding, Windows license note
+ |   |   |   +-- DriveSelect.tsx     # USB picker: model + whole-disk size, expandable per-partition breakdown
+|   |   |   +-- PartitionUsb.tsx    # Erase confirmation + partition (runs FIRST)
+ |   |   |   +-- OSSelect.tsx        # OS picker (Ubuntu; Windows greyed out) + .iso dropzone
+|   |   |   +-- MigrationPlan.tsx   # Folder selection sized by source→target OS
+|   |   |   +-- ExcludeReview.tsx   # Review/modify the backup exclude list
+|   |   |   +-- PasswordSetup.tsx   # Encryption password + write-it-down gate
+|   |   |   +-- BackupProgress.tsx  # copy → browser → Wi-Fi → inventory → verify → encrypt
+|   |   |   +-- CloudUpload.tsx     # Paid Cloud Backup upload + backup-ID ceremony
+|   |   |   +-- DownloadProgress.tsx# OS download + checksum
+|   |   |   +-- BootloaderProgress.tsx # Install boot files from the ISO
+|   |   |   +-- Done.tsx            # "Remove USB and boot from it" instructions
+|   |   |   +-- RestoreDetect.tsx   # Detect USB backup, or restore from cloud
+|   |   |   +-- RestoreProgress.tsx # decrypt → verify → copy → Wi-Fi
+ |   |   |   +-- AppPicker.tsx       # App + network reinstall checklist (+ AI assist) + Wi-Fi viewer
+|   |   |   +-- Pricing.tsx         # Free core vs paid Cloud Backup tiers
+|   |   |   +-- Faq.tsx
+|   |   |   +-- Account.tsx         # Profile / History / Settings tabs
+|   |   |   +-- MyFiles.tsx         # Backup/restore history
+|   |   |   +-- Settings.tsx
+|   |   +-- components/
+|   |   |   +-- ProgressBar.tsx     # ProgressBar + StageList
+|   |   |   +-- ErrorBox.tsx        # Plain message + collapsible technical detail
+|   |   +-- hooks/
+|   |       +-- useTauriProgress.ts # Subscribe to Tauri progress events
+|   |
+|   +-- os-sources.json             # Data-driven OS source manifest
+|   +-- tech-plan.md                # This document
+|   +-- test-plan.md                # Manual test cases
+|   +-- migration-scan-plan.md      # Migration-aware scanning design
+|
++-- assist-server/                  # Node server: scoped B2 keys for Cloud Backup
+|   +-- src/
+|       +-- index.ts                # Express routes
+|       +-- services/
+|           +-- b2admin.ts          # Mints scoped, disposable B2 keys
+|
++-- company/                        # Product & planning docs
++-- README.md
 ```
 
 ---
@@ -221,18 +220,22 @@ ferry/
     "id": "windows-11",
     "label": "Windows 11",
     "source_type": "microsoft_mct",
-    "notes": "Downloaded via Microsoft Media Creation Tool API"
+    "url": null,
+    "checksum_url": null,
+    "approx_bytes": 5800000000
   },
   {
-    "id": "ubuntu-lts",
+    "id": "ubuntu-2404-lts",
     "label": "Ubuntu 24.04 LTS",
     "source_type": "direct_url",
-    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso",
+    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-desktop-amd64.iso",
     "checksum_url": "https://releases.ubuntu.com/24.04/SHA256SUMS",
-    "checksum_type": "sha256"
+    "approx_bytes": 6100000000
   }
 ]
 ```
+Windows entries carry `null` URLs by decision (MCT cut) — the UI greys them
+out instead of pretending they download.
 
 ---
 
@@ -248,15 +251,15 @@ Each phase produces something testable before moving on. Phases 1–3 are the cr
 
 | Task | Module | Notes |
 |---|---|---|
-| Set up Tauri project skeleton | `main.rs` | `cargo tauri init`, add all crates to `Cargo.toml` |
-| Drive enumeration | `disk/enumerate.rs` | Use `windows::Win32::System::Ioctl` to list removable drives with model + size |
-| Directory walker + exclude list | `backup/scan.rs` | `walkdir` crate; exclude list as a `HashSet<PathBuf>` |
+| Set up Tauri project skeleton | `main.rs` + `lib.rs` | `cargo tauri init`, crates in `Cargo.toml`, admin manifest in `build.rs` |
+| Drive enumeration | `disk/enumerate.rs` | `GetDriveTypeW` for removable drives; collapse partitions to physical disks |
+| Directory walker + exclude list | `backup/scan.rs` | `walkdir`; segment-aware excludes; scoped `roots` from the migration plan |
+| Migration profile | `backup/paths.rs` | Measure profile folders; source→target OS matrix + warnings |
 | File copy with progress events | `backup/copy.rs` | Stream in 1 MB chunks; emit `backup:progress` Tauri events |
-| SHA-256 per file + manifest write | `backup/checksum.rs` | `sha2` crate; write `manifest.json` |
-| Manifest verify (pre-erase gate) | `backup/verify.rs` | Re-hash every file and compare; return list of failures |
-| Password → AES key derivation | `encrypt/keygen.rs` | Argon2id, random 32-byte salt stored alongside `Backup.enc` |
-| Encrypt Backup/ → Backup.enc | `encrypt/encrypt.rs` | AES-256-GCM; stream ZIP of Backup/ into encrypted output |
-| Decrypt Backup.enc in-memory | `encrypt/decrypt.rs` | Stream decrypt → verify tag → hand off to restore module |
+| SHA-256 per file + manifest write | `backup/checksum.rs` | `sha2`; write `manifest.json`; one self-healing re-copy on mismatch |
+| Password → AES key derivation | `crypto/keygen.rs` | Explicit OWASP Argon2id params; raw decoded salt bytes |
+| Encrypt Backup/ → Backup.enc | `crypto/encrypt.rs` + `crypto/stream.rs` | Chunked AES-256-GCM `FERRYENC1` container; verify-before-delete |
+| Decrypt Backup.enc | `crypto/decrypt.rs` | Stream decrypt → verify tag → Zip-Slip-safe extract to staging |
 
 **QA gate**: run backup on a test folder, verify `Backup.enc` cannot be read without the password, verify decryption restores exactly the original files.
 
@@ -271,12 +274,12 @@ Each phase produces something testable before moving on. Phases 1–3 are the cr
 
 | Task | Module | Notes |
 |---|---|---|
-| UAC elevation request at startup | `main.rs` | Tauri's `requestAdminPrivileges` or manifest `requireAdministrator` |
-| Partition creation (FAT32 + exFAT) | `disk/partition.rs` | Use `diskpart` scripted via `std::process::Command`, or `windows::Win32::System::Ioctl` directly |
-| Format partitions | `disk/partition.rs` | `format /FS:FAT32` and `format /FS:exFAT` via Command |
-| Write UEFI bootloader | `disk/bootloader.rs` | Embed a pre-built Ventoy/GRUB EFI binary; copy to FAT32 boot partition |
-| Safety lock: verify backup before enabling erase | `disk/partition.rs` | Check `verified: true` flag set by Phase 1 verify step |
-| Copy `Ferry.exe` onto USB data partition | `disk/partition.rs` | `std::fs::copy` after format |
+| UAC elevation at startup | `build.rs` + `windows-app-manifest.xml` | Embedded `requireAdministrator` manifest |
+| Partition creation (FAT32 + exFAT) | `disk/partition.rs` | Scripted `diskpart`; runs FIRST (before backup writes), removable re-check + explicit UI confirm |
+| Resolve new letters by label | `disk/partition.rs` | `assign` doesn't guarantee letters; poll `Get-Volume` by `FERRY_BOOT`/`FERRY_DATA` label |
+| diskpart failure detection | `disk/partition.rs` | Scans stdout (diskpart exits 0 on script errors); temp script always removed |
+| Extract ISO onto boot partition | `disk/bootloader.rs` | Mount ISO, copy tree with per-file size verify, FAT32 4 GB pre-flight, delete ISO after |
+| Portable Ferry.exe onto USB | — | Still open (mvp ship checklist) |
 
 **QA gate**: prepared USB boots on a test machine (not the user's machine) and shows a boot menu.
 
@@ -286,11 +289,12 @@ Each phase produces something testable before moving on. Phases 1–3 are the cr
 
 | Task | Module | Notes |
 |---|---|---|
-| Parse `os-sources.json` | `download/sources.rs` | Deserialize with `serde_json`; validate entries on load |
-| Windows ISO via MCT API | `download/fetch.rs` | Reverse-engineer or call the same API endpoint MCT uses; emit download progress events |
-| Ubuntu ISO direct download | `download/fetch.rs` | `reqwest` with `Range` header for resume; save to USB data partition |
-| Checksum verify against vendor hash | `download/verify.rs` | Fetch Ubuntu `SHA256SUMS`, parse, compare; delete file on mismatch |
-| Windows ISO checksum | `download/verify.rs` | Microsoft publishes checksums via the MCT API response |
+| Parse `os-sources.json` | `download/sources.rs` | Deserialize with `serde_json`; backend-resolved `source_id` only |
+| Windows ISO via MCT API | — | Cut for this build (see `company/completion-plan.md` D2) |
+| Ubuntu ISO direct download | `download/fetch.rs` | `reqwest` rustls + `Range` resume (206-checked); save to USB data partition |
+| User-supplied .iso (drop/browse) | `download/custom.rs` | Inspect-before-accept; chunked copy with progress; labeled unverified, no vendor checksum |
+| Checksum verify against vendor hash | `download/fetch.rs` | Fetch `SHA256SUMS`, strict parse, compare, delete file on mismatch |
+| Cloud upload/download/delete | `cloud/b2.rs` + `assist-server` | Free Ferry-managed B2 via minted per-backup keys; master key server-side only |
 
 **QA gate**: downloaded ISO matches published checksum; a re-run after a partial download resumes correctly.
 
@@ -300,14 +304,19 @@ Each phase produces something testable before moving on. Phases 1–3 are the cr
 
 | Task | Module | Notes |
 |---|---|---|
-| Registry scan → `apps.json` | `inventory/apps.rs` | `winreg` crate; three registry paths; deduplicate by `DisplayName` |
-| Winget catalog lookup | `inventory/picker.rs` | Call `winget search --id <name> --exact --accept-source-agreements` as subprocess; parse output |
-| Tier resolution logic | `inventory/picker.rs` | Tier 1 if winget match found; Tier 2 if `URLInfoAbout` non-empty; else Tier 3 |
-| `driverquery` + `pnputil` → `drivers.json` | `inventory/drivers.rs` | Run as subprocess; parse CSV output; flag `third_party: true` where OEM INF |
-| Chrome/Edge/Brave browser backup | `browser/chrome.rs` | Locate profile dir via `%LOCALAPPDATA%`; copy `Bookmarks` + `Login Data` |
-| Firefox browser backup | `browser/firefox.rs` | Locate profile via `%APPDATA%\Mozilla\Firefox\profiles.ini`; copy `places.sqlite` + `logins.json` |
-| Wi-Fi profile export | `wifi/export.rs` | `netsh wlan export profile folder=<path> key=clear` as subprocess |
-| Wi-Fi profile import | `wifi/import.rs` | Iterate exported XMLs; run `netsh wlan add profile filename=<file>` per profile |
+| Registry scan → `apps.json` | `inventory/apps.rs` | `winreg`; three registry paths + Store-app merge; user apps only (patches, updates, runtimes filtered by kind, never by vendor); deduplicate by name |
+| Store apps | `inventory/store.rs` | `Get-AppxPackage` CSV parse; framework packages filtered |
+| Winget catalog lookup | `inventory/picker.rs` | Exact single-match `--name` search; per-app progress events |
+| Tier resolution logic | `inventory/picker.rs` | Tier 1 winget; Tier 2 curated table (`curated-apps.json`) or http(s) `URLInfoAbout`; else Tier 3 |
+| Winget install | `inventory/picker.rs` | Strict package-ID allowlist, argv (never shell) |
+| Linux equivalents | `inventory/linux.rs` | Curated table → `Backup/linux-apps.md` for Ubuntu restores |
+| Save/read inventory | `inventory/save.rs` | Validated JSON round-trip on USB / from staging |
+| Network-adapter preflight → `drivers.json` | `inventory/network.rs` | `Get-NetAdapter` CSV parse; provider/version; down adapters flagged. Full driverquery inventory deliberately removed. |
+| Chrome/Edge/Brave browser backup | `browser/chrome.rs` | All profiles (`Default`, `Profile N`, Guest); per-file skip reasons |
+| Firefox browser backup | `browser/firefox.rs` | Every profile dir; `places.sqlite` + `logins.json` + `key4.db` |
+| Wi-Fi profile export | `wifi/export.rs` | `netsh` + locale-independent counting + `WiFi-Passwords.txt` sheet |
+| Wi-Fi in-app viewer | `wifi/list.rs` | List SSIDs (no secrets) + per-network reveal from the backup |
+| Wi-Fi profile import | `wifi/import.rs` | Iterate XMLs; size-capped; success/failure counts |
 
 **QA gate**: `apps.json` matches what's actually installed (manual spot-check vs. Add/Remove Programs); Tier 1 lookup succeeds for known apps (Chrome, VSCode, Slack); Wi-Fi export/import round-trip tested on a test machine.
 
@@ -317,12 +326,13 @@ Each phase produces something testable before moving on. Phases 1–3 are the cr
 
 | Task | Module | Notes |
 |---|---|---|
-| Auto-detect `Backup.enc` on connected USB | `restore/detect.rs` | Scan all removable drives for `Backup.enc` in root |
-| Decrypt + stream to restore staging | `restore/copy.rs` | Decrypt in memory; never write plaintext to new OS disk except the final `Restored/` copy |
-| Verify checksums from `manifest.json` | `restore/copy.rs` | Re-hash each file after copy; report failures |
-| Copy to `Restored/` on new desktop | `restore/copy.rs` | `std::env::var("USERPROFILE")` to find desktop; rebuild folder structure |
-| Wi-Fi reimport | `wifi/import.rs` | Reuse Phase 4 import module |
-| Build restore summary | `restore/summary.rs` | Count restored, skipped, failed, Wi-Fi networks added |
+| Auto-detect `Backup.enc` on connected USB | `restore/detect.rs` (Windows) / `restore_cli/main.rs` mount walk (Linux) | Scan removables / `/media`+`/mnt`+exe dir for `Backup.enc` + `backup.salt` |
+| Decrypt + stream to restore staging | `crypto/decrypt.rs` | Chunked decrypt to temp ZIP; Zip-Slip-safe extract |
+| Verify checksums from `manifest.json` | `restore/copy.rs` → `restore_to_desktop` | Shared by GUI + Linux CLI via progress callback; pre- and post-copy hash |
+| Copy to `Restored/` on new desktop | `restore/copy.rs` | `USERPROFILE\Desktop`; XDG-aware on Linux with home fallback |
+| Wi-Fi reimport | `wifi/import.rs` | Reuse Phase 4 import module (Windows only) |
+| Linux restore CLI | `restore_cli/main.rs` | `ferry-restore`: find → password prompt → decrypt → verify-copy; shared code only |
+| Build restore summary | `restore/copy.rs` | Count restored, skipped, failed, Wi-Fi networks added |
 
 ---
 
@@ -333,20 +343,20 @@ Build screens in the order the user experiences them. Each screen is a React com
 | Screen | Key behaviour |
 |---|---|
 | `Welcome.tsx` | Windows licence note, "this app needs admin access" explanation |
-| `DriveSelect.tsx` | List removable drives only; show model + size; block system drives at API level |
+| `DriveSelect.tsx` | List removable drives only; show model + whole-disk size; expandable partition dropdown (letter, label, filesystem, sizes); block system drives at API level |
 | `PartitionUsb.tsx` | Erase confirmation + partition/format. Runs immediately after drive selection, before anything is written |
-| `OSSelect.tsx` | Card per OS with logo; show required USB space |
+| `OSSelect.tsx` | Card per OS with logo; show required USB space; .iso dropzone + browse with inspect-before-accept |
 | `MigrationPlan.tsx` | Folder picker sized per folder, recommendations driven by source→target OS |
 | `ExcludeReview.tsx` | Show default exclude list; toggle items; add custom paths |
 | `PasswordSetup.tsx` | Password + confirm field; strength indicator; "write this down" warning; must re-type confirmation phrase |
 | `BackupProgress.tsx` | Six-stage progress: copy → browser → Wi-Fi → inventory → verify → encrypt; live file count and elapsed clock |
-| `CloudUpload.tsx` | Optional free managed cloud backup; returns a backup ID to write down |
+| `CloudUpload.tsx` | Paid Cloud Backup upload; returns a backup ID to write down |
 | `DownloadProgress.tsx` | Download progress with speed + ETA; checksum verify step shown |
 | `BootloaderProgress.tsx` | Install boot files extracted from the downloaded ISO; failure is a warning, not a dead end |
 | `Done.tsx` | Clear "safe to remove USB" + boot instructions with screenshots |
 | `RestoreDetect.tsx` | Auto-detect USB with Backup.enc, or restore from cloud by backup ID; password prompt |
 | `RestoreProgress.tsx` | Decrypt → verify → copy → Wi-Fi reimport; live count |
-| `AppPicker.tsx` | Grouped checklist; tier badges; Install / Get from site / No match states |
+| `AppPicker.tsx` | Grouped checklist; tier badges; Install / Get from site / No match states; Wi-Fi viewer; network adapters |
 
 ---
 
@@ -378,24 +388,24 @@ Full end-to-end run on a real machine with a real USB, testing all failure cases
 ## Build order summary
 
 ```
-Phase 1  ──▶  Phase 2  ──▶  Phase 3
+Phase 1  --▶  Phase 2  --▶  Phase 3
 (backup/       (disk ops)    (download)
- encrypt)           │              │
-    │               └──────┬───────┘
-    │                      ▼
-    └──────────────▶  Phase 4
+ encrypt)           |              |
+    |               +------+-------┘
+    |                      ▼
+    +--------------▶  Phase 4
                       (inventory)
-                           │
+                           |
                            ▼
                       Phase 5
                       (restore)
-                           │
+                           |
                            ▼
                       Phase 6 (UI)
-                           │
+                           |
                            ▼
                       Phase 7 (QA)
-                           │
+                           |
                            ▼
                       Phase 8 (ship)
 ```

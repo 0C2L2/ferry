@@ -41,7 +41,10 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 
 const PART_SIZE: u64 = 100 * 1024 * 1024; // 100 MB per B2 large-file part
-const SMALL_FILE_LIMIT: u64 = 5 * 1024 * 1024; // ≤ 5 MB → single-shot upload
+// B2 rejects a large file with only ONE part (b2_finish_large_file → 400), so
+// anything that would fit in a single part goes single-shot instead (B2 allows
+// up to 5 GB that way). Only files over one part size use the large-file API.
+const SMALL_FILE_LIMIT: u64 = PART_SIZE;
 
 fn assist_server_url() -> String {
     std::env::var("FERRY_ASSIST_SERVER_URL").unwrap_or_else(|_| "http://localhost:8787".to_string())
@@ -53,20 +56,20 @@ fn assist_server_url() -> String {
 /// storage. Returns the backup ID the user should write down.
 #[tauri::command]
 pub async fn upload_backup_b2(app: AppHandle, usb_root: String) -> Result<String, String> {
-    run_upload(app, PathBuf::from(usb_root)).await.map_err(|e| e.to_string())
+    run_upload(app, PathBuf::from(usb_root)).await.map_err(|e| format!("{e:#}"))
 }
 
 /// Download a previously-uploaded backup into a fresh staging directory.
 /// Returns that directory's path (pass it as `usb_root` to `decrypt_backup`).
 #[tauri::command]
 pub async fn download_backup_b2(backup_id: String) -> Result<String, String> {
-    run_download(backup_id).await.map_err(|e| e.to_string())
+    run_download(backup_id).await.map_err(|e| format!("{e:#}"))
 }
 
 /// Deletes a backup from Ferry's cloud storage — call once restore succeeds.
 #[tauri::command]
 pub async fn delete_cloud_backup(backup_id: String) -> Result<(), String> {
-    run_delete(backup_id).await.map_err(|e| e.to_string())
+    run_delete(backup_id).await.map_err(|e| format!("{e:#}"))
 }
 
 // ── Backend key exchange ─────────────────────────────────────────────────────
@@ -286,7 +289,7 @@ async fn upload_small(ctx: &UploadCtx<'_>, size: u64) -> Result<String> {
     let UploadCtx { client, auth, bucket_id, file_name, path, app, api_url, silent } = ctx;
     let url_resp: serde_json::Value = client
         .post(format!("{}/b2api/v3/b2_get_upload_url", api_url))
-        .bearer_auth(&auth.token)
+        .header("Authorization", &auth.token) // B2 wants the raw token; "Bearer …" is 401 bad_auth_token
         .json(&serde_json::json!({ "bucketId": bucket_id }))
         .send()
         .await
@@ -328,7 +331,7 @@ async fn upload_large(ctx: &UploadCtx<'_>, total_size: u64) -> Result<String> {
     let UploadCtx { client, auth, bucket_id, file_name, path, app, api_url, silent } = ctx;
     let start_resp: StartLargeFileResponse = client
         .post(format!("{}/b2api/v3/b2_start_large_file", api_url))
-        .bearer_auth(&auth.token)
+        .header("Authorization", &auth.token) // B2 wants the raw token; "Bearer …" is 401 bad_auth_token
         .json(&serde_json::json!({
             "bucketId": bucket_id,
             "fileName": file_name,
@@ -358,7 +361,7 @@ async fn upload_large(ctx: &UploadCtx<'_>, total_size: u64) -> Result<String> {
 
         let part_url_resp: GetUploadPartUrlResponse = client
             .post(format!("{}/b2api/v3/b2_get_upload_part_url", api_url))
-            .bearer_auth(&auth.token)
+            .header("Authorization", &auth.token) // B2 wants the raw token; "Bearer …" is 401 bad_auth_token
             .json(&serde_json::json!({ "fileId": file_id }))
             .send()
             .await
@@ -403,7 +406,7 @@ async fn upload_large(ctx: &UploadCtx<'_>, total_size: u64) -> Result<String> {
 
     let finish_resp: UploadResponse = client
         .post(format!("{}/b2api/v3/b2_finish_large_file", api_url))
-        .bearer_auth(&auth.token)
+        .header("Authorization", &auth.token) // B2 wants the raw token; "Bearer …" is 401 bad_auth_token
         .json(&FinishLargeFileRequest { file_id: &file_id, part_sha1_array: sha1_array })
         .send()
         .await

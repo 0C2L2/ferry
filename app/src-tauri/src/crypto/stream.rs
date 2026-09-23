@@ -8,23 +8,30 @@
 /// in RAM. Files without the magic header are rejected as legacy/foreign.
 use crate::crypto::keygen::KEY_LEN;
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
 use anyhow::{bail, Context, Result};
+#[cfg(windows)]
+use aes_gcm::aead::OsRng;
+#[cfg(windows)]
 use rand::RngCore;
 use std::io::{Read, Write};
 use std::path::Path;
+#[cfg(windows)]
 use zip::write::SimpleFileOptions;
+#[cfg(windows)]
 use zip::ZipWriter;
 
 pub(crate) const ENC_MAGIC: &[u8; 9] = b"FERRYENC1";
 /// Plaintext bytes per AEAD chunk.
+#[cfg(windows)]
 pub(crate) const ENC_CHUNK_SIZE: usize = 1024 * 1024;
 /// Sanity cap for a single record length (chunk + 16-byte GCM tag, generously).
 const MAX_RECORD_LEN: usize = 64 * 1024 * 1024 + 16;
 
 /// Zip `dir` into `dest` streaming file contents (no whole-archive buffering).
+#[cfg(windows)]
 pub(crate) fn zip_directory_to_file(dir: &Path, dest: &Path) -> Result<()> {
     let file =
         std::fs::File::create(dest).with_context(|| format!("Cannot create {}", dest.display()))?;
@@ -66,6 +73,7 @@ pub(crate) fn zip_directory_to_file(dir: &Path, dest: &Path) -> Result<()> {
 }
 
 /// Stream-encrypt `plaintext` into `dest_tmp` (caller renames into place).
+#[cfg(windows)]
 pub(crate) fn encrypt_file_chunked(
     key_bytes: &[u8; KEY_LEN],
     plaintext: &Path,
@@ -197,6 +205,7 @@ pub(crate) fn check_manifest_in_zip(zip_path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
 fn read_up_to(reader: &mut std::fs::File, buf: &mut [u8]) -> Result<usize> {
     let mut total = 0;
     while total < buf.len() {

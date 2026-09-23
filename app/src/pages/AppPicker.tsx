@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { api, assistApi, isAssistConfigured } from "../api";
+import { api } from "../api";
 import { ErrorBox } from "../components/ErrorBox";
-import type { AppEntry, AppSuggestion, DriverEntry, RestoreSummary } from "../types";
+import type { AppEntry, DriverEntry, RestoreSummary, WifiProfile } from "../types";
 
 interface Props {
   stagingDir: string | null;
@@ -24,17 +24,14 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
   const [apps, setApps] = useState<AppEntry[]>([]);
   const [drivers, setDrivers] = useState<DriverEntry[]>([]);
   const [sourceOs, setSourceOs] = useState<string | null>(null);
+  const [wifi, setWifi] = useState<WifiProfile[] | null>(null);
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [revealing, setRevealing] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  const [assistOn, setAssistOn] = useState(false);
-  const [assistLoading, setAssistLoading] = useState(false);
-  const [assistError, setAssistError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<Record<string, AppSuggestion>>({});
-  const [verifying, setVerifying] = useState<string | null>(null);
-  const [verified, setVerified] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!stagingDir) {
@@ -53,7 +50,24 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
       .readManifest(stagingDir)
       .then(m => setSourceOs(m.source_os))
       .catch(() => setSourceOs(null));
+    api
+      .listWifiProfiles(stagingDir)
+      .then(setWifi)
+      .catch(() => setWifi([]));
   }, [stagingDir]);
+
+  async function revealPassword(ssid: string) {
+    if (!stagingDir || revealed[ssid]) return;
+    setRevealing(ssid);
+    try {
+      const pw = await api.wifiPassword(stagingDir, ssid);
+      setRevealed(r => ({ ...r, [ssid]: pw }));
+    } catch (err) {
+      setRevealed(r => ({ ...r, [ssid]: `Could not reveal: ${String(err)}` }));
+    } finally {
+      setRevealing(null);
+    }
+  }
 
   async function install(app: AppEntry) {
     if (!app.winget_id) return;
@@ -70,37 +84,6 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
   }
 
   const shown = apps.filter(a => a.name.toLowerCase().includes(filter.toLowerCase()));
-  const unresolved = apps.filter(a => a.tier !== 1);
-
-  async function getAssistSuggestions() {
-    setAssistLoading(true);
-    setAssistError(null);
-    try {
-      const { suggestions: results } = await assistApi.suggestForApps(
-        unresolved.map(a => ({ name: a.name, publisher: a.publisher, tier: a.tier })),
-        "windows",
-      );
-      const byName: Record<string, AppSuggestion> = {};
-      for (const s of results) byName[s.name] = s;
-      setSuggestions(byName);
-    } catch (err) {
-      setAssistError(String(err));
-    } finally {
-      setAssistLoading(false);
-    }
-  }
-
-  async function verifyCommand(appName: string, command: string) {
-    setVerifying(appName);
-    try {
-      const result = await assistApi.verifyCommand(command);
-      setVerified(v => ({ ...v, [appName]: result.success }));
-    } catch (err) {
-      setAssistError(String(err));
-    } finally {
-      setVerifying(null);
-    }
-  }
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -123,34 +106,43 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
           a Windows license will not activate on a different edition.
         </div>
       )}
+      {wifi !== null && wifi.length > 0 && (
+        <details className="mb-4 text-sm bg-white border border-gray-200 rounded-xl p-4">
+          <summary className="cursor-pointer font-medium">
+            Wi-Fi networks ({wifi.length}) — passwords saved in this backup
+          </summary>
+          <ul className="mt-2 space-y-1.5">
+            {wifi.map(w => (
+              <li key={w.ssid} className="flex items-center justify-between gap-3">
+                <span>
+                  <span className="font-medium">{w.ssid}</span>{" "}
+                  <span className="text-gray-500 text-xs">{w.security}</span>
+                </span>
+                {revealed[w.ssid] ? (
+                  <code className="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">
+                    {revealed[w.ssid]}
+                  </code>
+                ) : w.has_password ? (
+                  <button
+                    onClick={() => revealPassword(w.ssid)}
+                    disabled={revealing === w.ssid}
+                    className="text-xs px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 shrink-0"
+                  >
+                    {revealing === w.ssid ? "…" : "Show password"}
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-400 shrink-0">open network</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-gray-500 mt-2">
+            Also saved as WiFi-Passwords.txt in the restored WiFi folder.
+          </p>
+        </details>
+      )}
       {error && <ErrorBox message="Could not load the app inventory." detail={error} />}
       {notice && <div className="bg-brand-50 text-brand-700 rounded-lg p-3 mb-4 text-sm">{notice}</div>}
-      {isAssistConfigured() && unresolved.length > 0 && (
-        <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4 text-sm">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={assistOn} onChange={e => setAssistOn(e.target.checked)} />
-            <span className="font-medium text-violet-900">
-              Ferry Assist (beta) — get AI help for the {unresolved.length} app
-              {unresolved.length === 1 ? "" : "s"} without a confident source
-            </span>
-          </label>
-          <p className="text-xs text-violet-700 mt-1">
-            Only app names/publishers are sent, never your files. Any suggested command is
-            dry-run in an isolated cloud sandbox before it's ever shown as safe — nothing
-            untested touches this PC.
-          </p>
-          {assistOn && (
-            <button
-              onClick={getAssistSuggestions}
-              disabled={assistLoading}
-              className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white disabled:opacity-40 hover:bg-violet-700"
-            >
-              {assistLoading ? "Asking Ferry Assist…" : "Get AI suggestions"}
-            </button>
-          )}
-          {assistError && <p className="text-xs text-red-600 mt-2">{assistError}</p>}
-        </div>
-      )}
       <input
         value={filter}
         onChange={e => setFilter(e.target.value)}
@@ -162,7 +154,6 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
       ) : (
         <ul className="space-y-2 max-h-96 overflow-y-auto pr-1">
           {shown.map(a => {
-            const suggestion = suggestions[a.name];
             return (
               <li key={a.name} className="bg-white border border-gray-200 rounded-lg px-4 py-2.5">
                 <div className="flex items-center justify-between gap-3">
@@ -189,27 +180,6 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
                     )}
                   </div>
                 </div>
-                {suggestion && (
-                  <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600">
-                    <p>🤖 {suggestion.suggestion}</p>
-                    {suggestion.command && (
-                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                        <code className="bg-gray-100 px-2 py-0.5 rounded">{suggestion.command}</code>
-                        {verified[a.name] ? (
-                          <span className="text-green-700">✓ Verified in sandbox</span>
-                        ) : (
-                          <button
-                            onClick={() => verifyCommand(a.name, suggestion.command!)}
-                            disabled={verifying === a.name}
-                            className="px-2 py-0.5 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40"
-                          >
-                            {verifying === a.name ? "Testing in sandbox…" : "Verify in sandbox"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </li>
             );
           })}
@@ -218,13 +188,14 @@ export function AppPicker({ stagingDir, summary, onRestart }: Props) {
       {drivers.length > 0 && (
         <details className="mt-6 text-sm">
           <summary className="cursor-pointer font-medium">
-            Driver list ({drivers.length}) — informational
+            Network adapters ({drivers.length}) — keep this info in case the new
+            system comes up offline and you need a driver from a second machine
           </summary>
           <ul className="mt-2 space-y-1 text-gray-600 max-h-48 overflow-y-auto">
             {drivers.slice(0, 200).map((d, i) => (
               <li key={`${d.name}-${i}`}>
                 {d.name}
-                {d.third_party ? " · third-party" : ""}
+                {d.provider ? ` · ${d.provider}` : ""}
                 {d.version ? ` · ${d.version}` : ""}
               </li>
             ))}

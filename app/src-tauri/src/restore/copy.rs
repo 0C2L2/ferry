@@ -1,25 +1,45 @@
 /// Restore files from a decrypted Backup/ directory to Restored/ on the new desktop.
 /// Verifies checksums from manifest.json before copying anything.
-use crate::types::RestoreSummary;
-use crate::backup::checksum::hash_file;
+///
+/// Shared by the Windows GUI and the Linux `ferry-restore` CLI. Verify-then-copy
+/// is the core safety promise of a restore, so it lives here once rather than
+/// being reimplemented per platform; callers supply their own progress
+/// reporting through the `progress` callback.
+use crate::hashing::hash_file;
 use crate::safety::{ensure_inside, sanitize_relative_path, validate_backup_dir};
 use crate::types::Manifest;
+use crate::types::RestoreSummary;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter};
 
 /// Tauri command: verify and copy files from decrypted Backup/ to Restored/ on desktop.
+#[cfg(windows)]
 #[tauri::command]
 pub async fn restore_files(
-    app: AppHandle,
-    backup_dir: String,    // Path to the decrypted Backup/ staging dir
+    app: tauri::AppHandle,
+    backup_dir: String, // Path to the decrypted Backup/ staging dir
 ) -> Result<RestoreSummary, String> {
-    run_restore(app, PathBuf::from(backup_dir))
-        .await
-        .map_err(|e| e.to_string())
+    use tauri::Emitter;
+    restore_to_desktop(PathBuf::from(backup_dir), &|current, total, item| {
+        let _ = app.emit(
+            "restore:progress",
+            serde_json::json!({
+                "stage": "restore",
+                "current": current,
+                "total": total,
+                "current_item": item,
+            }),
+        );
+    })
+    .map_err(|e| e.to_string())
 }
 
-async fn run_restore(app: AppHandle, backup_dir: PathBuf) -> Result<RestoreSummary> {
+/// Verify every file against the manifest, then copy it into `Restored/` on the
+/// desktop. `progress` is called once per file as `(done, total, path)`.
+pub fn restore_to_desktop(
+    backup_dir: PathBuf,
+    progress: &dyn Fn(u64, u64, &str),
+) -> Result<RestoreSummary> {
     let backup_str = backup_dir.to_string_lossy().to_string();
     let canonical_backup = validate_backup_dir(&backup_str)?;
     // Read manifest.json from the decrypted backup.
@@ -105,12 +125,7 @@ async fn run_restore(app: AppHandle, backup_dir: PathBuf) -> Result<RestoreSumma
             }
         }
 
-        let _ = app.emit("restore:progress", serde_json::json!({
-            "stage": "restore",
-            "current": i as u64 + 1,
-            "total": total,
-            "current_item": entry.original_path,
-        }));
+        progress(i as u64 + 1, total, &entry.original_path);
     }
 
     // Wi-Fi import is handled separately (wifi::import Tauri command).
@@ -124,9 +139,36 @@ async fn run_restore(app: AppHandle, backup_dir: PathBuf) -> Result<RestoreSumma
     })
 }
 
-fn get_desktop() -> Result<PathBuf> {
-    let profile = std::env::var("USERPROFILE")
-        .context("USERPROFILE not set")?;
+#[cfg(windows)]
+pub fn get_desktop() -> Result<PathBuf> {
+    let profile = std::env::var("USERPROFILE").context("USERPROFILE not set")?;
     Ok(PathBuf::from(profile).join("Desktop"))
+}
+
+/// Ubuntu localises the desktop folder — it is `~/Bureau` in French,
+/// `~/Escritorio` in Spanish, and can be disabled entirely. Hardcoding
+/// `~/Desktop` would silently create a second folder the file manager doesn't
+/// show, so ask XDG first and only fall back when it has no answer.
+#[cfg(not(windows))]
+pub fn get_desktop() -> Result<PathBuf> {
+    let home = std::env::var("HOME").context("HOME not set")?;
+
+    if let Ok(out) = std::process::Command::new("xdg-user-dir").arg("DESKTOP").output() {
+        if out.status.success() {
+            let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim().to_string());
+            // xdg-user-dir echoes $HOME back when the desktop dir is unset.
+            if path.is_dir() && path.as_os_str() != home.as_str() {
+                return Ok(path);
+            }
+        }
+    }
+
+    let fallback = PathBuf::from(&home).join("Desktop");
+    if fallback.is_dir() {
+        return Ok(fallback);
+    }
+    // No desktop directory at all (server install, minimal DE): the home
+    // directory is still somewhere the user can find their files.
+    Ok(PathBuf::from(home))
 }
 

@@ -44,6 +44,23 @@ fn run_save(usb_root: PathBuf, apps_json: &str, drivers_json: &str) -> Result<()
         serde_json::to_string_pretty(&drivers)?,
     )
     .context("Cannot write Backup/drivers.json")?;
+
+    // A human-readable Linux reinstall checklist, written now so it needs no
+    // network and no package queries on the far side — and so it exists even
+    // if ferry-restore never runs. Never fatal: a missing checklist must not
+    // cost the user their file backup.
+    match serde_json::from_str::<Vec<crate::types::AppEntry>>(apps_json) {
+        Ok(apps) => {
+            if let Err(e) = crate::inventory::linux::write_linux_apps(&backup_dir, &apps) {
+                eprintln!("Could not write linux-apps.md: {e:#}");
+            }
+        }
+        Err(e) => eprintln!("Could not parse apps for the Linux checklist: {e:#}"),
+    }
+    // Wallpaper + dark mode for Ubuntu. Same rule: never fatal.
+    if let Err(e) = crate::inventory::personal::save(&backup_dir) {
+        eprintln!("Could not save personal settings: {e:#}");
+    }
     Ok(())
 }
 

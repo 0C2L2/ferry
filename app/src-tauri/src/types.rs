@@ -32,9 +32,35 @@ pub struct Manifest {
 pub struct DriveInfo {
     pub drive_letter: String,
     pub model: String,
+    /// Whole-disk capacity, not the capacity of this one partition — erasing
+    /// reclaims the entire disk, so that is the number the user needs.
     pub total_bytes: u64,
     pub free_bytes: u64,
     pub is_removable: bool,
+    /// Physical disk this letter lives on; `None` when it could not be
+    /// resolved (the drive is still listed rather than hidden).
+    pub disk_number: Option<u32>,
+    /// How many partitions this disk currently has. More than one means the
+    /// stick was already set up for something else, and all of it is erased.
+    pub partition_count: u32,
+    /// One entry per currently-visible partition, for the expandable picker.
+    /// Informational only: selecting the drive always erases the whole disk.
+    pub partitions: Vec<PartitionInfo>,
+}
+
+/// A single visible partition on a removable disk.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartitionInfo {
+    /// Drive letter without trailing backslash, e.g. `"E:"`.
+    pub letter: String,
+    /// Volume label, e.g. `"FERRY_DATA"`. Empty when the volume has none.
+    pub label: String,
+    /// Filesystem name as reported by Windows, e.g. `"exFAT"`, `"FAT32"`.
+    pub filesystem: String,
+    /// This partition's capacity (not the disk's).
+    pub total_bytes: u64,
+    /// This partition's free space.
+    pub free_bytes: u64,
 }
 
 /// The two partitions created on a USB drive by `prepare_usb`, identified by

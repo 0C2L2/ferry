@@ -1,5 +1,8 @@
 pub mod keygen;
 pub mod stream;
-pub mod encrypt;
-pub mod decrypt;
 
+// Decryption is shared - the Linux ferry-restore CLI needs it. Encryption
+// only ever happens on the Windows side, during backup.
+pub mod decrypt;
+#[cfg(windows)]
+pub mod encrypt;

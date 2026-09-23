@@ -5,4 +5,5 @@ target/
 .DS_Store
 Thumbs.db
 .env
-nosana-job-definition.json
+# Built by `npm run build:restore` (Docker) — bundled, not committed.
+app/src-tauri/resources/ferry-restore

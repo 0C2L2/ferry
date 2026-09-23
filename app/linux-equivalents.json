@@ -1,0 +1,55 @@
+[
+  { "windows_name": "Mozilla Firefox", "kind": "same", "linux_name": "Firefox", "install": "sudo apt install firefox", "note": "" },
+  { "windows_name": "Google Chrome", "kind": "same", "linux_name": "Google Chrome", "install": "Download the .deb from google.com/chrome", "note": "Not in Ubuntu's archive; Google ships its own .deb and apt repo." },
+  { "windows_name": "Chromium", "kind": "same", "linux_name": "Chromium", "install": "sudo snap install chromium", "note": "" },
+  { "windows_name": "Brave", "kind": "same", "linux_name": "Brave", "install": "See brave.com/linux for the official apt repo", "note": "" },
+  { "windows_name": "Opera", "kind": "same", "linux_name": "Opera", "install": "See opera.com/download", "note": "" },
+  { "windows_name": "Microsoft Edge", "kind": "same", "linux_name": "Microsoft Edge", "install": "Download the .deb from microsoft.com/edge", "note": "" },
+  { "windows_name": "Mozilla Thunderbird", "kind": "same", "linux_name": "Thunderbird", "install": "sudo apt install thunderbird", "note": "Your Windows profile folder is compatible — see the opt-in extras in the migration plan." },
+
+  { "windows_name": "VLC media player", "kind": "same", "linux_name": "VLC", "install": "sudo apt install vlc", "note": "" },
+  { "windows_name": "Spotify", "kind": "same", "linux_name": "Spotify", "install": "sudo snap install spotify", "note": "" },
+  { "windows_name": "OBS Studio", "kind": "same", "linux_name": "OBS Studio", "install": "sudo apt install obs-studio", "note": "" },
+  { "windows_name": "Audacity", "kind": "same", "linux_name": "Audacity", "install": "sudo apt install audacity", "note": "" },
+  { "windows_name": "HandBrake", "kind": "same", "linux_name": "HandBrake", "install": "sudo apt install handbrake", "note": "" },
+
+  { "windows_name": "Visual Studio Code", "kind": "same", "linux_name": "Visual Studio Code", "install": "sudo snap install code --classic", "note": "" },
+  { "windows_name": "Git", "kind": "same", "linux_name": "Git", "install": "sudo apt install git", "note": "" },
+  { "windows_name": "Node.js", "kind": "same", "linux_name": "Node.js", "install": "sudo apt install nodejs npm", "note": "" },
+  { "windows_name": "Python", "kind": "same", "linux_name": "Python 3", "install": "Already installed on Ubuntu", "note": "Ubuntu ships Python 3 — use python3 and pip3." },
+  { "windows_name": "Docker Desktop", "kind": "same", "linux_name": "Docker Engine", "install": "See docs.docker.com/engine/install/ubuntu", "note": "Docker runs natively on Linux; Desktop's VM layer is not needed." },
+  { "windows_name": "VirtualBox", "kind": "same", "linux_name": "VirtualBox", "install": "sudo apt install virtualbox", "note": "" },
+  { "windows_name": "PuTTY", "kind": "alternative", "linux_name": "OpenSSH client", "install": "Already installed on Ubuntu", "note": "Use `ssh user@host` in a terminal. Saved sessions do not transfer." },
+  { "windows_name": "WinSCP", "kind": "alternative", "linux_name": "FileZilla", "install": "sudo apt install filezilla", "note": "Or use `scp`/`sftp` from a terminal." },
+  { "windows_name": "Notepad++", "kind": "alternative", "linux_name": "Kate or gedit", "install": "sudo apt install kate", "note": "Similar editor; plugins do not transfer." },
+
+  { "windows_name": "GIMP", "kind": "same", "linux_name": "GIMP", "install": "sudo apt install gimp", "note": "" },
+  { "windows_name": "Inkscape", "kind": "same", "linux_name": "Inkscape", "install": "sudo apt install inkscape", "note": "" },
+  { "windows_name": "Blender", "kind": "same", "linux_name": "Blender", "install": "sudo apt install blender", "note": "" },
+  { "windows_name": "Krita", "kind": "same", "linux_name": "Krita", "install": "sudo apt install krita", "note": "" },
+
+  { "windows_name": "Steam", "kind": "same", "linux_name": "Steam", "install": "sudo apt install steam", "note": "Many Windows-only titles run through Proton, but not all — check protondb.com." },
+  { "windows_name": "Discord", "kind": "same", "linux_name": "Discord", "install": "Download the .deb from discord.com/download", "note": "" },
+  { "windows_name": "Telegram", "kind": "same", "linux_name": "Telegram Desktop", "install": "sudo snap install telegram-desktop", "note": "" },
+  { "windows_name": "Zoom", "kind": "same", "linux_name": "Zoom", "install": "Download the .deb from zoom.us/download", "note": "" },
+  { "windows_name": "Slack", "kind": "same", "linux_name": "Slack", "install": "sudo snap install slack", "note": "" },
+
+  { "windows_name": "7-Zip", "kind": "alternative", "linux_name": "Archive Manager / p7zip", "install": "sudo apt install p7zip-full", "note": "Ubuntu's file manager already handles most archives." },
+  { "windows_name": "WinRAR", "kind": "alternative", "linux_name": "unrar", "install": "sudo apt install unrar", "note": "Extracts .rar; creating them is rarely needed." },
+  { "windows_name": "LibreOffice", "kind": "same", "linux_name": "LibreOffice", "install": "Already installed on Ubuntu", "note": "" },
+
+  { "windows_name": "Microsoft Office", "kind": "alternative", "linux_name": "LibreOffice", "install": "Already installed on Ubuntu", "note": "Opens and saves .docx/.xlsx/.pptx, but complex formatting, macros and Access have no equivalent. Microsoft 365 in a browser is closer to the real thing." },
+  { "windows_name": "Microsoft Excel", "kind": "alternative", "linux_name": "LibreOffice Calc", "install": "Already installed on Ubuntu", "note": "VBA macros will not run." },
+  { "windows_name": "Microsoft Word", "kind": "alternative", "linux_name": "LibreOffice Writer", "install": "Already installed on Ubuntu", "note": "" },
+  { "windows_name": "Microsoft Outlook", "kind": "alternative", "linux_name": "Thunderbird", "install": "sudo apt install thunderbird", "note": "No native .pst import — converting an Outlook archive needs a separate tool." },
+  { "windows_name": "Adobe Photoshop", "kind": "alternative", "linux_name": "GIMP or Krita", "install": "sudo apt install gimp", "note": "Not Photoshop. Opens PSDs imperfectly; no Adobe plugins and no CMYK workflow worth relying on." },
+  { "windows_name": "Adobe Illustrator", "kind": "alternative", "linux_name": "Inkscape", "install": "sudo apt install inkscape", "note": "Handles SVG well; .ai import is partial." },
+  { "windows_name": "Adobe Premiere", "kind": "alternative", "linux_name": "DaVinci Resolve or Kdenlive", "install": "sudo apt install kdenlive", "note": "Projects do not transfer. Resolve has a free Linux build with its own installer." },
+  { "windows_name": "Adobe Acrobat", "kind": "alternative", "linux_name": "Okular", "install": "sudo apt install okular", "note": "Reading and annotating are covered; full Acrobat editing is not." },
+  { "windows_name": "Paint.NET", "kind": "alternative", "linux_name": "Pinta", "install": "sudo apt install pinta", "note": "Closest in spirit to Paint.NET." },
+
+  { "windows_name": "iTunes", "kind": "none", "linux_name": "", "install": "", "note": "No Linux version, and nothing syncs an iPhone properly. Keep a Windows or Mac machine for device sync, or use iCloud in a browser." },
+  { "windows_name": "Epic Games Launcher", "kind": "none", "linux_name": "", "install": "", "note": "No official Linux build. Heroic Games Launcher is a community option, with the compatibility caveats that implies." },
+  { "windows_name": "AutoCAD", "kind": "none", "linux_name": "", "install": "", "note": "No Linux version. LibreCAD and FreeCAD exist but are not drop-in replacements for professional work." },
+  { "windows_name": "Visual Studio", "kind": "none", "linux_name": "", "install": "", "note": "Visual Studio proper is Windows-only. VS Code and JetBrains Rider run on Linux but are different tools." }
+]

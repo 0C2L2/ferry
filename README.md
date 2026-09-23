@@ -38,11 +38,11 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 | [`company/risks.md`](company/risks.md) | Guardrails and legal/licensing groundwork |
 | [`company/mvp.md`](company/mvp.md) | MVP scope, feature cuts, and ship checklist |
 | [`company/completion-plan.md`](company/completion-plan.md) | Phased plan to finish the MVP: decisions needed, blockers, and sequencing |
-| [`company/sponsor-integrations.md`](company/sponsor-integrations.md) | Nosana / Daytona / DNSimple integration plan, managed Cloud Backup, and what's still needed before it leaves a demo |
+| [`company/windows-to-ubuntu-plan.md`](company/windows-to-ubuntu-plan.md) | The Windows 11 → Ubuntu journey: file classification, Linux-side restore, and Windows→Linux app recommendations |
 
 ### App & coding
 
 | File | Purpose |
 |---|---|
 | [`app/tech-plan.md`](app/tech-plan.md) | Technology stack, project structure, and phased coding plan |
-| [`assist-server/README.md`](assist-server/README.md) | Optional AI-assist sidecar (Nosana inference, Daytona sandbox verification, DNSimple share links) |
+| [`assist-server/README.md`](assist-server/README.md) | Ferry server: mints scoped B2 keys for managed Cloud Backup |

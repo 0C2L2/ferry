@@ -16,6 +16,7 @@ use zeroize::Zeroize;
 /// why this validates via `validate_backup_dir` rather than requiring
 /// removable media specifically.
 /// Returns the path to the decrypted Backup/ directory.
+#[cfg(windows)]
 #[tauri::command]
 pub async fn decrypt_backup(
     usb_root: String,
@@ -29,7 +30,11 @@ pub async fn decrypt_backup(
         .map_err(|e| e.to_string())
 }
 
-fn run_decrypt(usb_root: PathBuf, password: &str, staging: PathBuf) -> Result<PathBuf> {
+/// Decrypt `Backup.enc` from `usb_root` into a staging directory and return the
+/// extracted `Backup/` path. Pass an empty `staging` to get a fresh temp dir.
+///
+/// Public because `ferry-restore` (the Linux CLI) needs it without Tauri.
+pub fn run_decrypt(usb_root: PathBuf, password: &str, staging: PathBuf) -> Result<PathBuf> {
     let usb_root_str = usb_root.to_string_lossy().to_string();
     let canonical_usb = validate_backup_dir(&usb_root_str)?;
     // An empty staging dir means "use a fresh OS temp folder", so the UI never

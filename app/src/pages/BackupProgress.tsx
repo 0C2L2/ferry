@@ -109,12 +109,12 @@ export function BackupProgress({ dataRoot, scan, password, onDone }: Props) {
 
         setStage(3, "active");
         setDetail("Scanning installed apps…");
-        const inventoryOk = await aux("App & driver list", async () => {
+        const inventoryOk = await aux("App & network list", async () => {
           const apps = await api.scanApps();
           const tiered = await api.resolveTiers(apps);
-          const drivers = await api.scanDrivers();
-          await api.saveInventory(root, JSON.stringify(tiered), JSON.stringify(drivers));
-          return `${tiered.length} apps, ${drivers.length} drivers`;
+          const adapters = await api.scanNetworkAdapters();
+          await api.saveInventory(root, JSON.stringify(tiered), JSON.stringify(adapters));
+          return `${tiered.length} apps, ${adapters.length} network adapters`;
         });
         setStage(3, inventoryOk === null ? "error" : "done");
 
@@ -130,6 +130,8 @@ export function BackupProgress({ dataRoot, scan, password, onDone }: Props) {
 
         setStage(5, "active");
         await api.encryptBackup(root, password);
+        // The Ubuntu side (ferry-restore + its launcher) rides on the same USB.
+        await aux("Ubuntu restore tool", () => api.copyRestoreTool(root));
         setStage(5, "done");
         setSucceeded(true);
         setFinished(true);

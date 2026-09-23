@@ -1,5 +1,7 @@
 pub mod apps;
-pub mod drivers;
+pub mod linux;
+pub mod network;
+pub mod personal;
 pub mod picker;
 pub mod save;
 pub mod store;

@@ -3,15 +3,16 @@ import { api } from "../api";
 import { useTauriProgress } from "../hooks/useTauriProgress";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorBox } from "../components/ErrorBox";
-import type { OsSource, ProgressPayload } from "../types";
+import type { CustomIso, OsSource, ProgressPayload } from "../types";
 
 interface Props {
   dataRoot: string;
   os: OsSource;
+  customIso: CustomIso | null;
   onDone: (isoFilename: string) => void;
 }
 
-export function DownloadProgress({ dataRoot, os, onDone }: Props) {
+export function DownloadProgress({ dataRoot, os, customIso, onDone }: Props) {
   const [prog, setProg] = useState({ current: 0, total: 0 });
   const [item, setItem] = useState("Starting download…");
   const [error, setError] = useState<string | null>(null);
@@ -27,8 +28,10 @@ export function DownloadProgress({ dataRoot, os, onDone }: Props) {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    api
-      .downloadOs(os.id, dataRoot)
+    const job = customIso
+      ? api.copyCustomIso(customIso.path, dataRoot)
+      : api.downloadOs(os.id, dataRoot);
+    job
       .then(path => {
         const filename = path.split(/[\\/]/).pop() ?? path;
         setIsoFilename(filename);
@@ -43,9 +46,13 @@ export function DownloadProgress({ dataRoot, os, onDone }: Props) {
 
   return (
     <div className="max-w-xl mx-auto">
-      <h2 className="text-xl font-semibold mb-1">Downloading {os.label}</h2>
+      <h2 className="text-xl font-semibold mb-1">
+        {customIso ? `Copying ${customIso.filename}` : `Downloading ${os.label}`}
+      </h2>
       <p className="text-sm text-gray-500 mb-4">
-        From the vendor's official server. The checksum is verified before use.
+        {customIso
+          ? "Your own file — no vendor checksum exists for it, so use only images you trust."
+          : "From the vendor's official server. The checksum is verified before use."}
       </p>
       {error && <ErrorBox message="Download failed. Any partial file was deleted." detail={error} />}
       {!error && (

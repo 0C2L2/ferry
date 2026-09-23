@@ -28,7 +28,15 @@ export function Done({ dataRoot, os, manifest, bootloaderWarning, onRestart }: P
         <li>1. Shut down this PC and plug in the USB drive.</li>
         <li>2. Boot from USB (usually F12, F2, Esc or Del at startup).</li>
         <li>3. Install {os.label}.</li>
-        <li>4. On the new system, run Ferry from the USB and choose “Restore from USB”.</li>
+        {/windows/i.test(os.id) ? (
+          <li>4. On the new system, run Ferry from the USB and choose “Restore from USB”.</li>
+        ) : (
+          <li>
+            4. On the new system, open the USB in Files, right-click <strong>Restore with Ferry</strong> →
+            “Allow Launching”, then double-click it. It brings back your files, Wi-Fi, apps, browser
+            data and wallpaper.
+          </li>
+        )}
       </ol>
       <button onClick={onRestart} className="text-brand-700 hover:text-brand-600 text-sm">
         ← Back to start

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, assistApi, isAssistConfigured } from "../api";
+import { api } from "../api";
 import { ProgressBar } from "../components/ProgressBar";
 import { ErrorBox } from "../components/ErrorBox";
 import { formatBytes } from "../types";
@@ -19,20 +19,20 @@ interface CloudProgress {
 }
 
 /** "Extra Careful" — upload the already-encrypted Backup.enc + backup.salt to
- *  Ferry's own managed cloud storage. Free, no account, no keys to create —
- *  Ferry mints a disposable, backup-scoped credential behind the scenes (see
- *  assist-server/src/services/b2admin.ts) so the user never touches a real
- *  B2 key. The only thing they need to keep is the backup ID this returns —
- *  same importance as their encryption password.
+ *  Ferry's own managed cloud storage. Cloud Backup is the one paid add-on
+ *  (one-time per migration, priced by backup size — see Pricing and
+ *  company/business-model.md); sign-in at checkout arrives with the accounts
+ *  launch, and uploads run open until then. The only thing the user must keep
+ *  is the backup ID this returns — same importance as their encryption
+ *  password. Ferry mints a disposable, backup-scoped credential behind the
+ *  scenes (see assist-server/src/services/b2admin.ts) so the user never
+ *  touches a real B2 key.
  */
 export function CloudUpload({ dataRoot, onDone, onSkip }: Props) {
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<CloudProgress | null>(null);
   const [backupId, setBackupId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shareLink, setShareLink] = useState<string | null>(null);
-  const [shareBusy, setShareBusy] = useState(false);
-  const [shareError, setShareError] = useState<string | null>(null);
 
   async function startUpload() {
     setBusy(true);
@@ -55,27 +55,15 @@ export function CloudUpload({ dataRoot, onDone, onSkip }: Props) {
     }
   }
 
-  async function getShareLink() {
-    if (!backupId) return;
-    setShareBusy(true);
-    setShareError(null);
-    try {
-      const link = await assistApi.createShareLink(backupId);
-      setShareLink(link.url);
-    } catch (err) {
-      setShareError(String(err));
-    } finally {
-      setShareBusy(false);
-    }
-  }
-
   if (backupId) {
     return (
       <div className="max-w-xl mx-auto text-center py-8">
         <div className="text-4xl mb-3">☁️</div>
         <h2 className="text-xl font-semibold mb-2">Cloud backup complete</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Your encrypted backup is safe in Ferry's cloud storage — free, no account needed.
+          Your encrypted backup is safe in Ferry's cloud storage. Cloud Backup
+          is a paid add-on — one-time per migration, priced by backup size
+          (see Pricing).
         </p>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left">
           <p className="text-sm font-medium text-amber-900 mb-1">
@@ -89,33 +77,6 @@ export function CloudUpload({ dataRoot, onDone, onSkip }: Props) {
             recovered — Ferry doesn't keep a separate record of either.
           </p>
         </div>
-
-        {isAssistConfigured() && (
-          <div className="mb-6">
-            {shareLink ? (
-              <p className="text-sm">
-                Shareable status link:{" "}
-                <a
-                  href={shareLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand-700 underline break-all"
-                >
-                  {shareLink}
-                </a>
-              </p>
-            ) : (
-              <button
-                onClick={getShareLink}
-                disabled={shareBusy}
-                className="text-sm px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-40 hover:bg-gray-50"
-              >
-                {shareBusy ? "Provisioning link…" : "Get a shareable status link"}
-              </button>
-            )}
-            {shareError && <p className="text-xs text-red-600 mt-2">{shareError}</p>}
-          </div>
-        )}
 
         <button
           onClick={onDone}
@@ -131,11 +92,21 @@ export function CloudUpload({ dataRoot, onDone, onSkip }: Props) {
     <div className="max-w-xl mx-auto">
       <h2 className="text-xl font-semibold mb-1">Extra Careful — Cloud backup</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Upload your encrypted backup to Ferry's cloud storage for a second copy — free, and
-        nothing to sign up for. Ferry never sees your plaintext; the AES-256 layer you already
-        set stays in place the whole way, and the copy is deleted once you've restored it.
+        Upload your encrypted backup to Ferry's cloud storage for a second copy.
+        One-time charge per migration (see Pricing for sizes) — checkout opens
+        with the accounts launch, and uploads run open until then. Ferry never
+        sees your plaintext; the AES-256 layer you already set stays in place
+        the whole way, and the copy is deleted once you've restored it.
       </p>
-      {error && <ErrorBox message="Upload failed." detail={error} />}
+      {error &&
+        (error.includes("Could not reach the Ferry Cloud service") ? (
+          <ErrorBox
+            message="Ferry Cloud can't be reached right now. Your USB backup is already complete and safe — you can continue without the cloud copy."
+            detail={error}
+          />
+        ) : (
+          <ErrorBox message="Upload failed." detail={error} />
+        ))}
 
       {prog && (
         <div className="mb-4">
