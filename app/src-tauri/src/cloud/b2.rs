@@ -1,17 +1,16 @@
-/// Ferry Cloud Backup — free, managed, on Ferry's own Backblaze B2 account.
+/// Ferry Cloud Backup — managed, on Ferry's own Backblaze B2 account.
 ///
-/// The desktop app never holds Ferry's B2 master key. Instead, for every
-/// upload or restore it asks the `assist-server` sidecar (see
-/// ../../../../assist-server/src/services/b2admin.ts) for a brand-new,
-/// disposable B2 Application Key scoped to exactly one backup's folder in
-/// the bucket, one capability (write for upload, read for restore), and a
-/// short lifetime. Even a leaked key can't touch any other backup.
+/// The desktop app never holds Ferry's B2 master key. The user signs in with
+/// an emailed code to Ferry's server (Cloudflare Worker, see ../../../../server),
+/// which then hands out a brand-new, disposable B2 Application Key scoped to
+/// exactly one backup's folder, one capability (write for upload, read for
+/// restore), and a short lifetime. Even a leaked key can't touch any other
+/// backup, and only the backup's owner can get one.
 ///
 /// Each backup lives at `<backup_id>/Backup.enc` and `<backup_id>/backup.salt`
-/// in Ferry's shared bucket — the ID (a UUID minted server-side) is the only
-/// thing the user needs to write down alongside their password to recover a
-/// cloud copy if the physical USB is lost. After a successful restore, the
-/// desktop app asks the backend to delete both files.
+/// in Ferry's shared bucket. The server emails the ID to the owner; restoring
+/// on a new machine is "sign in → pick the backup". After a successful restore
+/// the app asks the server to delete it.
 ///
 /// Architecture:
 ///   • The *already-encrypted* `Backup.enc` (plus the small `backup.salt`) is
@@ -46,21 +45,210 @@ const PART_SIZE: u64 = 100 * 1024 * 1024; // 100 MB per B2 large-file part
 // up to 5 GB that way). Only files over one part size use the large-file API.
 const SMALL_FILE_LIMIT: u64 = PART_SIZE;
 
-fn assist_server_url() -> String {
-    std::env::var("FERRY_ASSIST_SERVER_URL").unwrap_or_else(|_| "http://localhost:8787".to_string())
+/// Ferry's server. `FERRY_SERVER_URL` points a dev build at a local copy
+/// (`npm run dev` in server/ → http://127.0.0.1:8788).
+const DEFAULT_SERVER: &str = "https://api.ferryapp.download";
+
+fn server_url() -> String {
+    std::env::var("FERRY_SERVER_URL").unwrap_or_else(|_| DEFAULT_SERVER.to_string())
 }
 
-// ── Tauri commands ───────────────────────────────────────────────────────────
+/// The signed-in session for this run of the app. It stays in the Rust process
+/// — never handed to the webview — and is gone when the app closes.
+#[derive(Clone)]
+struct Session {
+    token: String,
+    /// None when signed in with a restore code rather than an email.
+    email: Option<String>,
+}
 
-/// Upload `<usb_root>/Backup.enc` + `backup.salt` to Ferry's managed B2
-/// storage. Returns the backup ID the user should write down.
+static SESSION: std::sync::Mutex<Option<Session>> = std::sync::Mutex::new(None);
+
+fn session() -> Result<Session> {
+    SESSION.lock().unwrap().clone().context("Please sign in to Ferry Cloud first.")
+}
+
+/// One call to Ferry's server. Its `{ "error": "…" }` messages are written for
+/// users, so they are passed through as the error text.
+async fn server<T: serde::de::DeserializeOwned>(
+    client: &Client,
+    method: reqwest::Method,
+    path: &str,
+    body: Option<serde_json::Value>,
+    signed_in: bool,
+) -> Result<T> {
+    let mut req = client.request(method, format!("{}{}", server_url(), path));
+    if signed_in {
+        req = req.bearer_auth(session()?.token);
+    }
+    if let Some(body) = body {
+        req = req.json(&body);
+    }
+    let res = req.send().await.context("Could not reach the Ferry Cloud service")?;
+    let status = res.status();
+    if status.is_success() {
+        return res.json().await.context("Ferry Cloud returned an unexpected response");
+    }
+    if status == reqwest::StatusCode::UNAUTHORIZED && signed_in {
+        *SESSION.lock().unwrap() = None;
+    }
+    let message = res
+        .json::<serde_json::Value>()
+        .await
+        .ok()
+        .and_then(|v| v["error"].as_str().map(str::to_string))
+        .unwrap_or_else(|| format!("Ferry Cloud error {status}"));
+    bail!(message)
+}
+
+/// Backup IDs are UUIDs; checking before they go into a URL path keeps a
+/// malformed one from addressing some other route.
+fn backup_path(backup_id: &str, action: &str) -> Result<String> {
+    let ok = backup_id.len() == 36 && backup_id.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+    if !ok {
+        bail!("That doesn't look like a Ferry backup ID");
+    }
+    Ok(format!("/api/cloud/backups/{backup_id}/{action}"))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudStatus {
+    reachable: bool,
+    free: bool,
+    /// Email sign-in is switched on (admin settings). Otherwise the restore
+    /// code is the only way in.
+    email_sign_in: bool,
+    signed_in: bool,
+    email: Option<String>,
+}
+
+/// Is the server up, is cloud free right now, and who is signed in.
+#[tauri::command]
+pub async fn cloud_status() -> Result<CloudStatus, String> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let ready = server::<serde_json::Value>(&client, reqwest::Method::GET, "/ready", None, false).await;
+    let session = SESSION.lock().unwrap().clone();
+    Ok(CloudStatus {
+        reachable: ready.is_ok(),
+        free: ready.as_ref().map(|v| v["free"] == true).unwrap_or(false),
+        email_sign_in: ready.as_ref().map(|v| v["emailSignIn"] == true).unwrap_or(false),
+        signed_in: session.is_some(),
+        email: session.and_then(|s| s.email),
+    })
+}
+
+/// Starts a restore-code identity for this upload. Returns the code the user
+/// must keep — it is the only way to reach the backup from another computer.
+#[tauri::command]
+pub async fn cloud_start_anonymous() -> Result<String, String> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Started {
+        token: String,
+        restore_code: String,
+    }
+    let s: Started = server(&Client::new(), reqwest::Method::POST, "/auth/anonymous", None, false)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    *SESSION.lock().unwrap() = Some(Session { token: s.token, email: None });
+    Ok(s.restore_code)
+}
+
+/// Signs in on the new computer with the restore code.
+#[tauri::command]
+pub async fn cloud_sign_in_code(code: String) -> Result<(), String> {
+    #[derive(Deserialize)]
+    struct SignedIn {
+        token: String,
+    }
+    let body = serde_json::json!({ "code": code });
+    let s: SignedIn = server(&Client::new(), reqwest::Method::POST, "/auth/restore-code", Some(body), false)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    *SESSION.lock().unwrap() = Some(Session { token: s.token, email: None });
+    Ok(())
+}
+
+/// Writes the restore code to a text file the user picked in a save dialog.
+#[tauri::command]
+pub async fn save_restore_code(path: String, code: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    // The path comes from a save dialog, but the webview passes it on: only
+    // ever write a .txt file.
+    if path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref() != Some("txt") {
+        return Err("Save the restore code as a .txt file".into());
+    }
+    let text = format!(
+        "Ferry Cloud restore code\r\n\r\n{code}\r\n\r\n\
+         On your new computer: open Ferry → Restore → Restore from Ferry Cloud,\r\n\
+         enter this code, then your backup password.\r\n\
+         The cloud copy is deleted 30 days after upload.\r\n\
+         Keep this file somewhere other than the Ferry USB drive.\r\n"
+    );
+    std::fs::write(&path, text).map_err(|e| format!("Could not save the file: {e}"))
+}
+
+/// Emails a 6-digit sign-in code.
+#[tauri::command]
+pub async fn cloud_sign_in_start(email: String) -> Result<(), String> {
+    let body = serde_json::json!({ "email": email });
+    server::<serde_json::Value>(&Client::new(), reqwest::Method::POST, "/auth/start", Some(body), false)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Trades the emailed code for a session. Returns the signed-in email.
+#[tauri::command]
+pub async fn cloud_sign_in_verify(email: String, code: String) -> Result<String, String> {
+    #[derive(Deserialize)]
+    struct Verified {
+        token: String,
+        email: String,
+    }
+    let body = serde_json::json!({ "email": email, "code": code });
+    let v: Verified = server(&Client::new(), reqwest::Method::POST, "/auth/verify", Some(body), false)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    *SESSION.lock().unwrap() = Some(Session { token: v.token, email: Some(v.email.clone()) });
+    Ok(v.email)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudBackup {
+    id: String,
+    tier: String,
+    status: String,
+    created: i64,
+    expires: Option<i64>,
+}
+
+/// The signed-in user's cloud backups, newest first.
+#[tauri::command]
+pub async fn cloud_list_backups() -> Result<Vec<CloudBackup>, String> {
+    #[derive(Deserialize)]
+    struct List {
+        backups: Vec<CloudBackup>,
+    }
+    server::<List>(&Client::new(), reqwest::Method::GET, "/api/cloud/backups", None, true)
+        .await
+        .map(|l| l.backups)
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Upload `<usb_root>/Backup.enc` + `backup.salt` for the signed-in user.
+/// Returns the backup ID (the server also emails it to them).
 #[tauri::command]
 pub async fn upload_backup_b2(app: AppHandle, usb_root: String) -> Result<String, String> {
     run_upload(app, PathBuf::from(usb_root)).await.map_err(|e| format!("{e:#}"))
 }
 
-/// Download a previously-uploaded backup into a fresh staging directory.
-/// Returns that directory's path (pass it as `usb_root` to `decrypt_backup`).
+/// Download one of the signed-in user's backups into a fresh staging
+/// directory. Returns that directory's path (pass it to `decrypt_backup`).
 #[tauri::command]
 pub async fn download_backup_b2(backup_id: String) -> Result<String, String> {
     run_download(backup_id).await.map_err(|e| format!("{e:#}"))
@@ -72,7 +260,7 @@ pub async fn delete_cloud_backup(backup_id: String) -> Result<(), String> {
     run_delete(backup_id).await.map_err(|e| format!("{e:#}"))
 }
 
-// ── Backend key exchange ─────────────────────────────────────────────────────
+// ── Scoped B2 keys ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,43 +272,11 @@ struct ScopedKey {
     bucket_name: String,
 }
 
-async fn fetch_upload_key(client: &Client) -> Result<ScopedKey> {
-    client
-        .post(format!("{}/api/cloud/upload-key", assist_server_url()))
-        .send()
-        .await
-        .context("Could not reach the Ferry Cloud service")?
-        .error_for_status()
-        .context("Ferry Cloud service rejected the upload request")?
-        .json()
-        .await
-        .context("Ferry Cloud service returned an unexpected response")
-}
-
-async fn fetch_download_key(client: &Client, backup_id: &str) -> Result<ScopedKey> {
-    client
-        .post(format!("{}/api/cloud/download-key", assist_server_url()))
-        .json(&serde_json::json!({ "backupId": backup_id }))
-        .send()
-        .await
-        .context("Could not reach the Ferry Cloud service")?
-        .error_for_status()
-        .context("Ferry Cloud service rejected the restore request — check the backup ID")?
-        .json()
-        .await
-        .context("Ferry Cloud service returned an unexpected response")
-}
-
 async fn run_delete(backup_id: String) -> Result<()> {
-    let client = Client::new();
-    client
-        .post(format!("{}/api/cloud/delete", assist_server_url()))
-        .json(&serde_json::json!({ "backupId": backup_id }))
-        .send()
+    let path = backup_path(&backup_id, "delete")?;
+    server::<serde_json::Value>(&Client::new(), reqwest::Method::POST, &path, None, true)
         .await
-        .context("Could not reach the Ferry Cloud service")?
-        .error_for_status()
-        .context("Ferry Cloud service could not delete the backup")?;
+        .context("Ferry Cloud could not delete the backup")?;
     Ok(())
 }
 
@@ -136,7 +292,39 @@ async fn run_upload(app: AppHandle, usb_root: PathBuf) -> Result<String> {
     }
 
     let client = Client::new();
-    let key = fetch_upload_key(&client).await?;
+    let total = enc_path.metadata().context("Cannot read Backup.enc size")?.len()
+        + salt_path.metadata().context("Cannot read backup.salt size")?.len();
+
+    // Reserve a backup. Free mode ignores the tier; paid mode prices by it.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Checkout {
+        backup_id: String,
+        checkout_url: Option<String>,
+    }
+    const GB: u64 = 1024 * 1024 * 1024;
+    let tier = match total {
+        t if t <= 50 * GB => "50gb",
+        t if t <= 200 * GB => "200gb",
+        _ => "1tb",
+    };
+    let body = serde_json::json!({ "tier": tier, "size": total });
+    let checkout: Checkout =
+        server(&client, reqwest::Method::POST, "/api/cloud/checkout", Some(body), true).await?;
+    if checkout.checkout_url.is_some() {
+        // ponytail: paid mode needs "open checkout in the browser, poll until
+        // paid"; build it when a payment provider is switched on.
+        bail!("Ferry Cloud now asks for payment, which this version of Ferry can't do yet. Please update Ferry.");
+    }
+
+    let key: ScopedKey = server(
+        &client,
+        reqwest::Method::POST,
+        &backup_path(&checkout.backup_id, "upload-key")?,
+        None,
+        true,
+    )
+    .await?;
     let auth = authorize(&client, &key.key_id, &key.application_key).await?;
 
     // The small salt file first (near-instant), then the real backup.
@@ -152,7 +340,6 @@ async fn run_upload(app: AppHandle, usb_root: PathBuf) -> Result<String> {
     .await
     .context("Failed to upload backup.salt")?;
 
-    let file_size = enc_path.metadata().context("Cannot read Backup.enc size")?.len();
     upload_one_file(
         &client,
         &auth,
@@ -164,7 +351,18 @@ async fn run_upload(app: AppHandle, usb_root: PathBuf) -> Result<String> {
     )
     .await
     .context("Failed to upload Backup.enc")?;
-    let _ = file_size;
+
+    // Tells the server the upload is complete: it checks the size, starts the
+    // 30-day clock and emails the backup ID to the user.
+    server::<serde_json::Value>(
+        &client,
+        reqwest::Method::POST,
+        &backup_path(&key.backup_id, "uploaded")?,
+        None,
+        true,
+    )
+    .await
+    .context("The upload finished but Ferry Cloud could not confirm it")?;
 
     let _ = app.emit("cloud:done", serde_json::json!({ "backup_id": key.backup_id }));
     Ok(key.backup_id)
@@ -424,7 +622,14 @@ async fn upload_large(ctx: &UploadCtx<'_>, total_size: u64) -> Result<String> {
 
 async fn run_download(backup_id: String) -> Result<String> {
     let client = Client::new();
-    let key = fetch_download_key(&client, &backup_id).await?;
+    let key: ScopedKey = server(
+        &client,
+        reqwest::Method::POST,
+        &backup_path(&backup_id, "download-key")?,
+        None,
+        true,
+    )
+    .await?;
     let auth = authorize(&client, &key.key_id, &key.application_key).await?;
 
     let staging = std::env::temp_dir().join(format!(

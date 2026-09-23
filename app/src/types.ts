@@ -158,6 +158,26 @@ export interface MigrationProfile {
   warnings: string[];
 }
 
+/** Ferry Cloud server state, as seen by the app. */
+export interface CloudStatus {
+  reachable: boolean;
+  /** Cloud Backup costs nothing right now (no payment step). */
+  free: boolean;
+  /** Email sign-in is on (admin settings); otherwise a restore code is used. */
+  emailSignIn: boolean;
+  signedIn: boolean;
+  /** Signed-in email for this app session (null for restore-code sessions). */
+  email: string | null;
+}
+
+export interface CloudBackup {
+  id: string;
+  tier: string;
+  status: "paid" | "uploaded" | "deleted" | "rejected";
+  created: number;
+  expires: number | null;
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
   if (bytes < 1024) return `${bytes} B`;

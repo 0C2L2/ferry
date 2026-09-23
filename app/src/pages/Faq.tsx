@@ -5,7 +5,7 @@ import { useState } from "react";
 const QA: { q: string; a: string }[] = [
   {
     q: "Do I need an account to use Ferry?",
-    a: "No. Backup, USB creation, OS downloads and restore are free forever with no login wall. You only register and sign in if you buy the Cloud Backup add-on.",
+    a: "No. Backup, USB creation, OS downloads and restore are free with no sign-up. Even the optional cloud copy needs no account: you get a restore code instead.",
   },
   {
     q: "Will I lose my files when my PC is wiped?",
@@ -21,7 +21,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "My USB drive is too small. What now?",
-    a: "Use a larger drive — Ferry tells you the required size before anything is erased. Or buy the Cloud Backup add-on (one-time per migration, priced by backup size — see Pricing): it holds the overflow, or a second safety copy, in the cloud.",
+    a: "Use a larger drive — Ferry tells you the required size before anything is erased. Or use Ferry Cloud Backup — free for now, up to 50 GB, kept 30 days: it holds a second encrypted copy in the cloud.",
   },
   {
     q: "Are my browser passwords transferred?",
@@ -29,15 +29,15 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: "Will my programs come back automatically?",
-    a: "No — installed programs are never copied over, because that breaks across systems. Ferry gives you a checklist of what was installed with one-click reinstall buttons from verified sources (winget catalog first, vendor site second, or an honest “no source found”).",
+    a: "Programs themselves are never copied — that breaks across systems. Ferry lists the apps you installed yourself; on Ubuntu it installs the Linux versions it can with one password prompt, and marks the rest honestly (a labelled alternative, or no Linux version).",
   },
   {
     q: "Is any of my data uploaded to the internet?",
-    a: "Only if you buy the optional Cloud Backup add-on: then your already-encrypted backup file is uploaded to Ferry's storage — Ferry cannot read it, and it is deleted after you restore. Everything else stays between your PC and your USB drive.",
+    a: "Only if you choose the optional cloud copy: then your already-encrypted backup file is uploaded to Ferry's storage — Ferry cannot read it, and it is deleted after 30 days or when you restore it. Everything else stays between your PC and your USB drive.",
   },
   {
     q: "Why does Ferry need administrator access?",
-    a: "Partitioning and formatting a USB drive, exporting Wi-Fi profiles, and scanning installed drivers are privileged Windows operations. Ferry only uses elevation for these steps.",
+    a: "Partitioning and formatting a USB drive, exporting Wi-Fi profiles, and reading the list of installed apps are privileged Windows operations. Ferry only uses elevation for these steps.",
   },
   {
     q: "Do my Wi-Fi networks come back?",

@@ -129,16 +129,25 @@ Done = every screen reachable and exercised in `app/test-plan.md`.
 The website is a separate deployable with four areas. Static marketing can
 ship early; accounts/billing arrive with Cloud Backup.
 
+**Platform decisions (2026-09-23) — everything on free tiers, $0/month to run:**
+Cloudflare Pages (site) · Cloudflare Workers (Ferry server, replaces the local
+Express `assist-server`) · Cloudflare D1 (users, sessions, paid backups) ·
+Cloudflare R2 (installer downloads) · Backblaze B2 (backup storage, unchanged)
+· Resend (email: sign-in codes, backup-ID + expiry mails) · Lemon Squeezy
+(payments, merchant of record — handles VAT; Stripe is unavailable in Korea).
+Ferry is **open source** → code signing via SignPath Foundation (free for OSS).
+Domain: Student Pack / `eu.org` (free) or ~$10/yr — needed only for Resend to email users.
+
 ### 3.1 Public site (ships with v1.0)
 1. Landing (promise, how-it-works, download button with OS/arch detection).
 2. Pricing (Free vs Cloud tiers vs Corporate — mirrors in-app copy).
 3. FAQ + docs (install guides, troubleshooting, AV-whitelisting explainer).
-4. Download hosting (signed artifacts + checksums published).
+4. Download hosting on R2 (SignPath-signed installer + SHA-256 published).
 5. Done = a stranger can find, trust, download, and install Ferry.
 
 ### 3.2 Accounts + auth (ships with Cloud Backup)
-1. Email + password signup/login, sessions, password reset; local-only app
-   accounts migrate (link code shown in-app, claimed on web).
+1. Passwordless: email → 6-digit code (Resend) → session. No passwords to
+   store, reset or leak. Same sign-in in the app and on the web.
 2. The desktop app signs in **against this API** (never embeds secrets);
    tokens are short-lived, scoped to backup up/download only.
 3. GDPR from day one: export + delete-my-data flows.
@@ -152,7 +161,10 @@ ship early; accounts/billing arrive with Cloud Backup.
 3. Done = a user can self-serve everything without emailing support.
 
 ### 3.4 Billing
-1. Provider: Stripe (cards, one-time + subscriptions, receipts, webhooks).
+1. Provider: Lemon Squeezy (one-time checkout per size tier, receipts,
+   signed `order_created` webhook → D1 marks the backup paid).
+   **Status 2026-09-23:** payments deferred (no provider account yet) — Cloud
+   Backup runs free behind the `CLOUD_FREE` flag (50 GB, one per email).
 2. Individual: one-time charge per migration by backup size (`business-model.md`).
 3. Corporate: per-seat subscription + repair-shop dashboard (migrations per
    machine, backup status) — the second product.
@@ -175,7 +187,7 @@ ship early; accounts/billing arrive with Cloud Backup.
    GCS/S3 for Corporate (SLA + audit). Never the reverse (egress math).
 2. **Protocol:** client encrypts first (same `FERRYENC1` container), chunked
    resumable upload with per-part hashes; disposable per-backup keys minted by
-   `assist-server`; server verifies identity + quota only — never content.
+   the Ferry Worker; server verifies identity + payment only — never content.
 3. **Retention:** migration bridge, not forever-storage: delete after restore
    (best-effort from the app), user-visible backup ID, delete-on-request.
 4. **Credential brokerage:** short-lived upload/download keys minted per

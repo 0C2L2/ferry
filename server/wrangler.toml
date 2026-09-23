@@ -1,0 +1,31 @@
+# Ferry server — Cloudflare Worker (replaces the local Express assist-server).
+# Secrets are NOT here: locally they live in .dev.vars (gitignored), in
+# production they are set with `npx wrangler secret put <NAME>`. See README.md.
+name = "ferry-server"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+# Keep the workers.dev address alive next to the custom domain: installed app
+# builds and links shared earlier point at it.
+workers_dev = true
+# api.ferryapp.download for current app builds; the workers.dev address stays
+# on too, so installs of older builds keep working.
+routes = [{ pattern = "api.ferryapp.download", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ferry"
+database_id = "baf9035f-0034-4e1f-b7f8-1202588198bf"
+migrations_dir = "migrations"
+
+# Hourly: reminders, expiry deletes, abandoned-checkout cleanup. Hourly rather
+# than daily because each run handles a small batch (free-tier subrequest cap).
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+RETENTION_DAYS = "30"
+# Cloud Backup is free until a payment provider is set up: every backup is
+# capped at 50 GB, one active per email. Set to "0" to require payment.
+CLOUD_FREE = "1"
+# Resend's shared test sender until Ferry has its own domain.
+EMAIL_FROM = "Ferry <onboarding@resend.dev>"

@@ -146,7 +146,7 @@ export function Account({ tab, onTabChange }: Props) {
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
-            <div className="text-sm text-gray-500">Cloud Backup (paid add-on)</div>
+            <div className="text-sm text-gray-500">Cloud Backup</div>
             {plannedTier ? (
               <>
                 <div className="font-medium">
@@ -164,9 +164,9 @@ export function Account({ tab, onTabChange }: Props) {
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-500 mt-1">No tier selected.</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  One-time per migration: ~$5 / 50 GB, ~$15 / 200 GB, ~$40 / 1 TB.
+                  Free for now: up to 50 GB, kept 30 days. You sign in with your email when you
+                  upload.
                 </p>
               </>
             )}

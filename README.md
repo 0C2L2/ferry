@@ -27,6 +27,8 @@ Windows 10 reached end of support on October 14, 2025, and a large share of othe
 
 ## Docs in this repo
 
+**Start here:** [`NEXT-STEPS.md`](NEXT-STEPS.md) (what happens next, step by step) · [`MASTER-PLAN.md`](MASTER-PLAN.md) (0→100% reference) · [`STATUS.md`](STATUS.md) (where things stand) · [`server/`](server/README.md) (Ferry server, Cloudflare Worker).
+
 ### Company & product
 
 | File | Purpose |

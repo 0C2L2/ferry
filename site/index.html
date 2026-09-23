@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ferry — move from Windows to Ubuntu without losing a thing</title>
+  <meta name="description" content="Ferry backs up your files, turns the same USB drive into an Ubuntu installer, and brings your files, Wi-Fi, apps and bookmarks back afterwards. Free.">
+  <link rel="canonical" href="https://ferryapp.download/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://ferryapp.download/">
+  <meta property="og:title" content="Ferry — move to Ubuntu without losing a thing">
+  <meta property="og:description" content="Back up, install Ubuntu from the same USB, and get your files, Wi-Fi, apps and bookmarks back. Free.">
+  <meta property="og:image" content="https://ferryapp.download/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.png">
+  <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/session.js"></script>
+  <script type="module" src="/demo.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site">
+    <div class="wrap bar">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="28" height="28">Ferry</a>
+      <nav class="nav" aria-label="Main">
+        <a class="opt" href="#how">How it works</a>
+        <a class="opt" href="/faq">FAQ</a>
+        <a class="opt" href="/contact">Contact</a>
+        <a href="/account" data-auth-link>Sign in</a>
+        <details class="theme">
+          <summary aria-label="Colour theme" title="Colour theme">
+            <svg class="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            <svg class="i-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+            <svg class="i-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+          </summary>
+          <div class="theme-menu" role="group" aria-label="Colour theme">
+            <button type="button" data-theme-set="system" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System</button>
+            <button type="button" data-theme-set="light" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>Light</button>
+            <button type="button" data-theme-set="dark" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>Dark</button>
+          </div>
+        </details>
+        <a class="btn btn-sm" href="#download">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="wrap hero">
+      <div>
+        <p class="eyebrow enter">Windows 10 / 11 → Ubuntu 24.04</p>
+        <h1 class="enter d2">Switch computers. <em>Keep everything.</em></h1>
+        <p class="lead enter d3">
+          Ferry backs up your files, turns the same USB drive into an Ubuntu installer, and puts
+          it all back afterwards — your files, Wi-Fi, apps, bookmarks, even your wallpaper.
+          No technical skills needed, and it's free.
+        </p>
+        <div class="ctas enter d4">
+          <a class="btn btn-lg" href="#download">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 19.5h15"/></svg>
+            Download for Windows
+          </a>
+          <span class="fine">Free · about 3 MB · <a href="#app">see the app</a></span>
+        </div>
+      </div>
+
+      <figure class="demo enter d5" aria-label="Ferry in four steps, playing automatically">
+        <div class="demo-screen">
+          <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>Ferry</span></div>
+
+          <div class="scene" id="scene-1" role="tabpanel" aria-labelledby="step-1">
+            <p class="kicker">01 · On your Windows PC</p>
+            <h3>Finding your files</h3>
+            <p class="demo-num"><span data-count="12483">0</span><small>files · 38.6 GB</small></p>
+            <ul class="rows">
+              <li>Pictures<span class="track"><i class="to-100"></i></span><b>6,912</b></li>
+              <li>D:\Music<span class="track"><i class="to-46"></i></span><b>3,149</b></li>
+              <li>Documents<span class="track"><i class="to-30"></i></span><b>2,104</b></li>
+              <li>Desktop<span class="track"><i class="to-05"></i></span><b>318</b></li>
+            </ul>
+            <p class="pill-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>Windows' own files are left out</p>
+          </div>
+
+          <div class="scene" id="scene-2" role="tabpanel" aria-labelledby="step-2">
+            <p class="kicker">02 · Onto the USB drive</p>
+            <div class="usb-row">
+              <div class="usb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="7" rx="1"/><path d="M5.5 9.5h13v9a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3z"/><path d="M10 5.5h.01M14 5.5h.01"/></svg></div>
+              <div>
+                <h3>Encrypting onto the USB</h3>
+                <p class="ticker" aria-hidden="true"></p>
+              </div>
+            </div>
+            <p class="demo-num"><span data-count="100" data-ms="3800">0</span><small>% · AES-256</small></p>
+            <span class="track slow"><i></i></span>
+            <p class="pill-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Your password never leaves this PC</p>
+          </div>
+
+          <div class="scene" id="scene-3" role="tabpanel" aria-labelledby="step-3">
+            <p class="kicker">03 · Reinstall</p>
+            <h3>Install Ubuntu from the same USB</h3>
+            <div class="boot" aria-hidden="true">
+              <div class="dev"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="7" y="9" width="34" height="22" rx="3"/><path d="M3 37h42l-3-4H6z"/><path d="M19 15h4v4h-4zM25 15h4v4h-4zM19 21h4v4h-4zM25 21h4v4h-4z" fill="currentColor" stroke="none"/></svg>Your PC today</div>
+              <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15m0 0-5-5m5 5-5 5"/></svg></div>
+              <div class="dev"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="7" y="9" width="34" height="22" rx="3"/><path d="M3 37h42l-3-4H6z"/><circle cx="24" cy="20" r="5"/><circle cx="24" cy="12.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="17.5" cy="23.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="30.5" cy="23.5" r="1.6" fill="currentColor" stroke="none"/></svg>Ubuntu 24.04</div>
+            </div>
+            <p class="muted">Restart, choose the USB, and let the Ubuntu installer guide you. Ferry already put it there — and checked it.</p>
+          </div>
+
+          <div class="scene" id="scene-4" role="tabpanel" aria-labelledby="step-4">
+            <p class="kicker">04 · On Ubuntu</p>
+            <h3>Done — welcome to Ubuntu</h3>
+            <ul class="done-list">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span><b>12,483 files</b> are back in the Restored folder.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span>Apps installed: <b>VLC, Spotify, GIMP, Telegram</b>.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span>Wi-Fi saved: <b>Home-5G, Studio</b>.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span>Firefox bookmarks, history and passwords.</span></li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span>Your wallpaper and dark mode.</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="demo-steps" role="tablist" aria-label="Demo steps">
+          <button type="button" role="tab" id="step-1" aria-controls="scene-1" aria-selected="true"><i></i>Find files</button>
+          <button type="button" role="tab" id="step-2" aria-controls="scene-2" aria-selected="false" tabindex="-1"><i></i>Encrypt to USB</button>
+          <button type="button" role="tab" id="step-3" aria-controls="scene-3" aria-selected="false" tabindex="-1"><i></i>Install Ubuntu</button>
+          <button type="button" role="tab" id="step-4" aria-controls="scene-4" aria-selected="false" tabindex="-1"><i></i>Everything's back</button>
+        </div>
+      </figure>
+    </div>
+
+    <section id="how" class="band">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>Three steps, one USB drive</h2>
+          <p>Your files ride across on the same USB drive that installs Ubuntu. Nothing on your computer is touched until your backup has been checked.</p>
+        </div>
+
+        <figure class="crossing" aria-label="Illustration: a ferry carries your files from the Windows shore to the Ubuntu shore">
+          <svg viewBox="0 0 1000 230" aria-hidden="true">
+            <rect class="water" x="0" y="132" width="1000" height="98"/>
+            <path class="wave" d="M240 160q15-6 30 0t30 0t30 0t30 0t30 0t30 0M600 172q15-6 30 0t30 0t30 0t30 0M300 202q15-6 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0M660 212q15-6 30 0t30 0t30 0"/>
+            <path class="route" d="M235 150Q500 126 765 150"/>
+            <path class="shore" d="M0 132H165Q205 132 218 162L232 230H0Z"/>
+            <path class="shore" d="M1000 132H835Q795 132 782 162L768 230H1000Z"/>
+
+            <rect class="device" x="46" y="58" width="100" height="64" rx="7"/>
+            <rect class="screen-win" x="54" y="66" width="84" height="48" rx="3"/>
+            <path class="mark" d="M86 80h9v9h-9zM97 80h9v9h-9zM86 91h9v9h-9zM97 91h9v9h-9z"/>
+            <rect class="device" x="32" y="122" width="128" height="7" rx="3"/>
+            <text class="label" x="96" y="166" text-anchor="middle">Windows</text>
+            <text class="sub" x="96" y="186" text-anchor="middle">your PC today</text>
+
+            <rect class="device" x="854" y="58" width="100" height="64" rx="7"/>
+            <rect class="screen-ub" x="862" y="66" width="84" height="48" rx="3"/>
+            <circle class="device" cx="904" cy="90" r="11"/>
+            <circle class="mark" cx="904" cy="77" r="3"/>
+            <circle class="mark" cx="893" cy="97" r="3"/>
+            <circle class="mark" cx="915" cy="97" r="3"/>
+            <rect class="device" x="840" y="122" width="128" height="7" rx="3"/>
+            <text class="label" x="904" y="166" text-anchor="middle">Ubuntu</text>
+            <text class="sub" x="904" y="186" text-anchor="middle">your new system</text>
+
+            <text class="sub" x="500" y="112" text-anchor="middle">your files, encrypted</text>
+
+            <g class="boat">
+              <path class="hull" d="M214 148h112l-16 22h-80z"/>
+              <rect class="cabin" x="232" y="126" width="46" height="22" rx="4"/>
+              <path class="cabin" d="M238 133h10M254 133h10" fill="none"/>
+              <rect class="cargo" x="286" y="130" width="26" height="18" rx="3"/>
+              <path class="cargo-line" d="M286 136h26"/>
+            </g>
+          </svg>
+        </figure>
+
+        <ol class="steps reveal">
+          <li>
+            <h3>Back up</h3>
+            <p>Ferry finds your own files — not Windows' — encrypts them with your password, copies them to the USB and checks every one.</p>
+          </li>
+          <li>
+            <h3>Install Ubuntu</h3>
+            <p>The same USB now starts the Ubuntu installer. Restart from it and install, as the installer guides you.</p>
+          </li>
+          <li>
+            <h3>Restore</h3>
+            <p>Open the USB in Ubuntu and double-click <b>Restore with Ferry</b>. Enter your password; your computer comes back.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="app">
+      <div class="wrap showcase">
+        <figure class="shot reveal">
+          <img src="/img/app-welcome.webp" width="1960" height="1400" loading="lazy" decoding="async"
+               alt="The Ferry app on Windows: two large choices — Back up and create installer, or Restore from USB.">
+          <figcaption>The Ferry app on Windows — the first screen you see.</figcaption>
+        </figure>
+        <div class="reveal">
+          <div class="section-head">
+            <h2>Made for people, not IT departments</h2>
+            <p>Two big buttons and plain words. Ferry explains each step and checks its own work before anything is erased.</p>
+          </div>
+          <ul class="points">
+            <li>
+              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+              <div><h3>Nothing to configure</h3><p>Plug in a USB drive, pick Ubuntu, set a password. Ferry works out the rest.</p></div>
+            </li>
+            <li>
+              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></span>
+              <div><h3>Checks before it trusts</h3><p>Every file is compared with its copy on the USB before Ferry calls the backup done.</p></div>
+            </li>
+            <li>
+              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span>
+              <div><h3>Honest when it can't</h3><p>No Linux version of an app? Ferry says so — or offers a clearly labelled alternative. It never guesses.</p></div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="what" class="band">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <h2>More than files come back</h2>
+          <p>The things that make a computer feel like yours — carried across in one trip.</p>
+        </div>
+        <div class="bento">
+          <article class="tile big reveal">
+            <div>
+              <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v6.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg></div>
+              <h3>Your files</h3>
+              <p>Documents, Desktop, Pictures, Downloads — and the folders you keep on other drives. They land in a <em>Restored</em> folder on your new desktop, checked against the originals.</p>
+            </div>
+            <div class="files" aria-hidden="true">
+              <b>Documents/</b> Taxes 2025.pdf<br>
+              <b>Pictures/</b> Lisbon trip/ · 1,204 items<br>
+              <b>Desktop/</b> thesis-final-v7.docx<br>
+              <b>D:\Music/</b> 3,149 items
+            </div>
+          </article>
+          <article class="tile reveal">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 13.5v6.5M13.5 16.75H20"/></svg></div>
+            <h3>Your apps</h3>
+            <p>Ferry lists the apps you installed yourself and installs their Linux versions — one Ubuntu password prompt.</p>
+          </article>
+          <article class="tile reveal">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9a14 14 0 0 1 19 0"/><path d="M5.5 12.5a9.5 9.5 0 0 1 13 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.2" r="0.9" fill="currentColor"/></svg></div>
+            <h3>Wi-Fi</h3>
+            <p>Saved networks and passwords reconnect on their own. Work and school logins just ask you to sign in again.</p>
+          </article>
+          <article class="tile reveal">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4-6.5 4v-16a1 1 0 0 1 1-1z"/></svg></div>
+            <h3>Browser data</h3>
+            <p>Firefox bookmarks, history and passwords move across. Chrome, Edge and Brave bookmarks come back ready to import.</p>
+          </article>
+          <article class="tile reveal">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="9.5" r="1.8"/><path d="m21 15-4.5-4.5L7 20"/></svg></div>
+            <h3>Your look</h3>
+            <p>Your wallpaper and dark mode follow you, so the new system feels familiar from the first minute.</p>
+          </article>
+          <article class="tile wide reveal">
+            <div>
+              <h3>A cloud copy, in case the USB goes missing</h3>
+              <p>Keep a second encrypted copy in Ferry's cloud — free for now, up to 50 GB, deleted after 30 days.</p>
+            </div>
+            <a class="btn btn-quiet" href="/account">Manage your cloud copy</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap facts reveal">
+        <div>
+          <h3>Encrypted on your computer</h3>
+          <p>AES-256 with a password only you know — before anything is copied or uploaded.</p>
+        </div>
+        <div>
+          <h3>We can't read your files</h3>
+          <p>Your password never leaves your computer. Not even Ferry can open your backup.</p>
+        </div>
+        <div>
+          <h3>No accounts, ads or tracking</h3>
+          <p>The app works without signing up. This site sets no cookies and runs no analytics.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="download" class="band">
+      <div class="wrap download">
+        <div class="reveal">
+          <div class="section-head">
+            <h2>Download Ferry</h2>
+            <p>Runs on the Windows computer you're moving away from.</p>
+          </div>
+          <ul>
+            <li>Windows 10 or 11, 64-bit</li>
+            <li>A USB drive bigger than your files plus about 7 GB for the Ubuntu installer — Ferry tells you the exact size first</li>
+            <li>The USB drive is erased first, so use one with nothing you need on it</li>
+          </ul>
+        </div>
+        <div class="dl-box reveal">
+          <p class="os-hint hidden" role="status"></p>
+          <a class="btn btn-lg" href="/downloads/Ferry-Setup.exe" download>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M4.5 19.5h15"/></svg>
+            Download Ferry for Windows
+          </a>
+          <p class="meta">Ferry-Setup.exe · 3.4 MB · version 0.1.0</p>
+          <p class="note">
+            Windows may say <b>“Windows protected your PC”</b> because the installer isn't signed yet.
+            Choose <b>More info → Run anyway</b>. Signed releases come with the open-source launch.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap foot">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="22" height="22">Ferry</a>
+      <nav aria-label="Footer">
+        <a href="/faq">FAQ</a>
+        <a href="/account">Account</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <span class="end">© 2026 Ferry</span>
+    </div>
+  </footer>
+</body>
+</html>

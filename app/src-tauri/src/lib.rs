@@ -96,6 +96,13 @@ pub fn run() {
             cloud::b2::upload_backup_b2,
             cloud::b2::download_backup_b2,
             cloud::b2::delete_cloud_backup,
+            cloud::b2::cloud_status,
+            cloud::b2::cloud_sign_in_start,
+            cloud::b2::cloud_sign_in_verify,
+            cloud::b2::cloud_list_backups,
+            cloud::b2::cloud_start_anonymous,
+            cloud::b2::cloud_sign_in_code,
+            cloud::b2::save_restore_code,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ferry");

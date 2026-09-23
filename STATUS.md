@@ -3,6 +3,16 @@
 **Date:** 2026-09-23 (updated) · **Version:** 0.1.0 (dev) · **Stack:** Tauri 2 + Rust + React 18 + Tailwind
 **Health:** `cargo test` 67/67 pass · `cargo clippy --locked -- -D warnings` clean · `tsc + vite build` clean · `npm audit --omit=dev` 0 vulns
 
+**2026-09-23 (later) — online.** Ferry's server runs on Cloudflare
+(`server/`, https://ferry-server.rashidtagaev01.workers.dev, D1 + hourly cron)
+and the website is live at https://ferry.rashidtagaev01.workers.dev
+(`site/`: landing, download, FAQ, privacy, terms, `/account`, `/admin`).
+Cloud Backup is free (50 GB, one per person, 30 days) and needs no account:
+the app hands out a **restore code**. Email sign-in (Resend) is built but
+switched off until Ferry has a domain — the admin page turns it on. Verified:
+40-step local smoke test + live end-to-end run (code → upload → sign in with
+the code → delete).
+
 **2026-09-23 update — "your computer is back".** `ferry-restore` now does
 more than files, and it finally ships on the USB:
 - **Click-to-restore:** the Windows app copies `ferry-restore` (built in

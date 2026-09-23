@@ -1,0 +1,21 @@
+{
+  "name": "ferry-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Ferry server (Cloudflare Worker): email sign-in, Lemon Squeezy payments, scoped B2 keys for Cloud Backup.",
+  "scripts": {
+    "dev": "wrangler dev --port 8788 --ip 127.0.0.1 --local-upstream 127.0.0.1:8788",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply ferry --local",
+    "db:migrate": "wrangler d1 migrations apply ferry --remote",
+    "smoke": "node test/smoke.mjs",
+    "site:deploy": "node scripts/deploy-site.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260923.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.136.3"
+  }
+}

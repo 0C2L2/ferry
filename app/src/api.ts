@@ -4,6 +4,8 @@ import type {
   AppEntry,
   BackupLocation,
   BrowserBackup,
+  CloudBackup,
+  CloudStatus,
   CustomIsoInfo,
   DriveInfo,
   DriverEntry,
@@ -16,26 +18,6 @@ import type {
   UsbLayout,
   WifiProfile,
 } from "./types";
-
-// Ferry's server (../assist-server) mints the scoped keys for Cloud Backup.
-// Unset by default — every other Ferry feature works fully offline without it.
-const ASSIST_SERVER_URL = import.meta.env.VITE_ASSIST_SERVER_URL;
-
-export function isAssistConfigured(): boolean {
-  return Boolean(ASSIST_SERVER_URL);
-}
-
-/** Configured AND answering. Offering Cloud Backup when the server is down
- *  would only show the user a button that fails with a network error. */
-export async function isCloudReachable(): Promise<boolean> {
-  if (!ASSIST_SERVER_URL) return false;
-  try {
-    const res = await fetch(`${ASSIST_SERVER_URL}/ready`, { signal: AbortSignal.timeout(3000) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 export const api = {
   listDrives: () => invoke<DriveInfo[]>("list_removable_drives"),
@@ -91,5 +73,13 @@ export const api = {
   uploadBackupB2: (usbRoot: string) => invoke<string>("upload_backup_b2", { usbRoot }),
   downloadCloudBackup: (backupId: string) => invoke<string>("download_backup_b2", { backupId }),
   deleteCloudBackup: (backupId: string) => invoke<void>("delete_cloud_backup", { backupId }),
+  // Ferry Cloud: every call goes through Rust, which holds the sign-in token.
+  cloudStatus: () => invoke<CloudStatus>("cloud_status"),
+  cloudSignInStart: (email: string) => invoke<void>("cloud_sign_in_start", { email }),
+  cloudSignInVerify: (email: string, code: string) => invoke<string>("cloud_sign_in_verify", { email, code }),
+  cloudListBackups: () => invoke<CloudBackup[]>("cloud_list_backups"),
+  cloudStartAnonymous: () => invoke<string>("cloud_start_anonymous"),
+  cloudSignInCode: (code: string) => invoke<void>("cloud_sign_in_code", { code }),
+  saveRestoreCode: (path: string, code: string) => invoke<void>("save_restore_code", { path, code }),
 };
 

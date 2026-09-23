@@ -7,3 +7,15 @@ Thumbs.db
 .env
 # Built by `npm run build:restore` (Docker) — bundled, not committed.
 app/src-tauri/resources/ferry-restore
+
+# Cloudflare Worker local secrets + state
+.dev.vars
+.wrangler/
+# Admin page login token (local copy of the ADMIN_TOKEN secret)
+server/.admin-token
+server/.cf-token
+# Installer copied in by server/scripts/deploy-site.mjs, not committed
+site/downloads/
+
+# graphify knowledge graph (regenerate with `graphify update .`)
+graphify-out/

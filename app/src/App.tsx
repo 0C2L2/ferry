@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, CircleHelp, RotateCcw, Tags, UserRound, Usb } from "lucide-react";
-import { api, isCloudReachable } from "./api";
+import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth";
 import { Welcome } from "./pages/Welcome";
 import { DriveSelect } from "./pages/DriveSelect";
@@ -277,7 +277,10 @@ function Shell() {
               // Cloud Backup runs through Ferry's server, so it is only
               // offered when that server actually answers — otherwise the
               // screen could only show a button that fails.
-              isCloudReachable().then(ok => setStep(ok ? "cloud" : "download"));
+              api
+                .cloudStatus()
+                .then(s => setStep(s.reachable ? "cloud" : "download"))
+                .catch(() => setStep("download"));
             }}
           />
         )}

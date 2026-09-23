@@ -1,0 +1,17 @@
+# The website (../site) as a Worker that only serves static files — Cloudflare's
+# current way to host a static site. Free; no bindings, secrets or cron here.
+# Deploy with `npm run site:deploy` (never plain `wrangler deploy`, which is the
+# API server's wrangler.toml).
+name = "ferry"
+compatibility_date = "2025-09-01"
+# Keep the workers.dev address alive next to the custom domain: installed app
+# builds and links shared earlier point at it.
+workers_dev = true
+routes = [
+  { pattern = "ferryapp.download", custom_domain = true },
+  { pattern = "www.ferryapp.download", custom_domain = true },
+]
+
+[assets]
+directory = "../site"
+not_found_handling = "404-page"

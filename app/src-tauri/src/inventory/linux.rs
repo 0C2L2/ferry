@@ -26,8 +26,12 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 struct Equivalent {
     windows_name: String,
+    /// Other names the same app appears under (Store package IDs, renames).
+    #[serde(default)]
+    aliases: Vec<String>,
     /// "same" — the same application, with a Linux build.
     /// "alternative" — a different application that does a similar job.
+    /// "builtin" — nothing to install: Ubuntu or the browser covers it.
     /// "none" — no Linux version and no substitute worth vouching for.
     kind: String,
     linux_name: String,
@@ -40,17 +44,24 @@ fn table() -> Result<Vec<Equivalent>> {
         .context("linux-equivalents.json is malformed")
 }
 
-/// Case-insensitive prefix match against the curated key.
+/// The longest curated name (or alias) that `app_name` starts with, ending at a
+/// word boundary. Case-insensitive.
 ///
 /// Registry display names carry version and locale suffixes ("Mozilla Firefox
-/// (x64 en-US)"), so exact matching would miss nearly everything. Both sides of
-/// the comparison are human-verified — the key is written by us, not inferred —
-/// so this stays deterministic rather than fuzzy.
+/// (x64 en-US)"), so exact matching would miss nearly everything. The boundary
+/// keeps "Git" from claiming "GitKraken"; longest-wins lets "Opera GX" beat
+/// "Opera". The keys are written by us, not inferred, so this stays
+/// deterministic rather than fuzzy.
 fn find<'a>(entries: &'a [Equivalent], app_name: &str) -> Option<&'a Equivalent> {
     let lower = app_name.to_lowercase();
     entries
         .iter()
-        .find(|e| lower.starts_with(&e.windows_name.to_lowercase()))
+        .flat_map(|e| std::iter::once(&e.windows_name).chain(&e.aliases).map(move |k| (k.to_lowercase(), e)))
+        .filter(|(key, _)| {
+            lower.starts_with(key.as_str()) && !lower[key.len()..].starts_with(|c: char| c.is_alphanumeric())
+        })
+        .max_by_key(|(key, _)| key.len())
+        .map(|(_, e)| e)
 }
 
 fn bullet(out: &mut String, name: &str, e: &Equivalent) {
@@ -69,6 +80,7 @@ pub fn render(apps: &[AppEntry]) -> Result<String> {
 
     let mut same = Vec::new();
     let mut alternative = Vec::new();
+    let mut builtin = Vec::new();
     let mut none = Vec::new();
     let mut unknown = Vec::new();
 
@@ -76,6 +88,7 @@ pub fn render(apps: &[AppEntry]) -> Result<String> {
         match find(&entries, &app.name) {
             Some(e) if e.kind == "same" => same.push((app, e)),
             Some(e) if e.kind == "alternative" => alternative.push((app, e)),
+            Some(e) if e.kind == "builtin" => builtin.push((app, e)),
             Some(e) => none.push((app, e)),
             None => unknown.push(app),
         }
@@ -105,6 +118,15 @@ pub fn render(apps: &[AppEntry]) -> Result<String> {
              you give up.\n\n",
         );
         for (app, e) in &alternative {
+            bullet(&mut out, &app.name, e);
+        }
+        out.push('\n');
+    }
+
+    if !builtin.is_empty() {
+        out.push_str("## Nothing to install\n\n");
+        out.push_str("Ubuntu or your web browser already covers these.\n\n");
+        for (app, e) in &builtin {
             bullet(&mut out, &app.name, e);
         }
         out.push('\n');
@@ -143,11 +165,12 @@ pub fn render(apps: &[AppEntry]) -> Result<String> {
 
     out.push_str("---\n\n");
     out.push_str(&format!(
-        "{} apps found: {} available on Linux, {} with an alternative, {} with no Linux version, \
-         {} unlisted.\n",
+        "{} apps found: {} available on Linux, {} with an alternative, {} covered by Ubuntu or \
+         the browser, {} with no Linux version, {} unlisted.\n",
         apps.len(),
         same.len(),
         alternative.len(),
+        builtin.len(),
         none.len(),
         unknown.len()
     ));
@@ -221,10 +244,47 @@ mod tests {
         ])
         .unwrap();
         let names: Vec<&str> = list.iter().map(|i| i.app.as_str()).collect();
-        // Chrome is a vendor .deb, Word is "already installed": not automatic.
-        assert_eq!(names, ["Slack", "Microsoft Outlook", "Notepad++", "Node.js"]);
-        assert!(list[1].alternative && list[2].alternative && !list[0].alternative);
-        assert_eq!(list[3].packages, ["nodejs", "npm"]);
+        // Chrome is a vendor .deb: not automatic.
+        assert_eq!(names, ["Slack", "Microsoft Word", "Microsoft Outlook", "Notepad++", "Node.js"]);
+        let alternatives: Vec<bool> = list.iter().map(|i| i.alternative).collect();
+        assert_eq!(alternatives, [false, true, true, true, false]);
+        assert_eq!(list[4].packages, ["nodejs", "npm"]);
+    }
+
+    #[test]
+    fn one_install_per_package() {
+        // Word and Excel both mean LibreOffice: install it once.
+        let list = super::install_list(&[app("Microsoft Word"), app("Microsoft Excel")]).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].packages, ["libreoffice"]);
+    }
+
+    #[test]
+    fn matches_stop_at_word_boundaries_and_prefer_the_longest_name() {
+        let entries = table().unwrap();
+        // "Git" must not claim a different product that merely starts with it.
+        assert!(find(&entries, "GitLab Runner 16.9").is_none());
+        assert_eq!(find(&entries, "Git").unwrap().windows_name, "Git");
+        assert_eq!(find(&entries, "Opera GX Stable 108.0").unwrap().windows_name, "Opera GX");
+        assert_eq!(find(&entries, "Opera Stable 108.0").unwrap().windows_name, "Opera");
+        assert_eq!(find(&entries, "Adobe Acrobat Reader DC").unwrap().kind, "builtin");
+        assert_eq!(find(&entries, "Adobe Acrobat (64-bit)").unwrap().kind, "alternative");
+    }
+
+    #[test]
+    fn store_ids_and_renamed_apps_match_through_aliases() {
+        let entries = table().unwrap();
+        assert_eq!(find(&entries, "SpotifyAB.SpotifyMusic").unwrap().linux_name, "Spotify");
+        assert_eq!(find(&entries, "Oracle VM VirtualBox 7.0.14").unwrap().linux_name, "VirtualBox");
+    }
+
+    #[test]
+    fn browser_and_builtin_answers_get_their_own_section() {
+        let out = render(&[app("4DF9E0F8.Netflix")]).unwrap();
+        assert!(out.contains("## Nothing to install"));
+        assert!(out.contains("netflix.com"));
+        assert!(!out.contains("## No Linux version"));
+        assert!(super::install_list(&[app("4DF9E0F8.Netflix")]).unwrap().is_empty());
     }
 
     #[test]

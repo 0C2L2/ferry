@@ -1,0 +1,29 @@
+# Copy to .dev.vars for `npm run dev` (gitignored). In production set each
+# of these with `npx wrangler secret put <NAME>` instead — never in git.
+
+# Ferry's Backblaze B2 account. Account-level key with writeKeys, so it can
+# mint disposable per-backup keys. Never goes into the desktop app.
+B2_MASTER_KEY_ID=
+B2_MASTER_APPLICATION_KEY=
+B2_BUCKET_NAME=
+
+# Resend. Leave empty locally: emails are then printed to the dev console.
+RESEND_API_KEY=
+
+# Lemon Squeezy (test mode first). Leave the API key empty locally and
+# DEV_MODE=1 marks checkouts paid without a real payment.
+LEMONSQUEEZY_API_KEY=
+LEMONSQUEEZY_STORE_ID=
+LEMONSQUEEZY_WEBHOOK_SECRET=
+LS_VARIANT_50GB=
+LS_VARIANT_200GB=
+LS_VARIANT_1TB=
+# Where Lemon Squeezy sends the buyer after paying (the website's thank-you page).
+CHECKOUT_REDIRECT_URL=
+
+# Local development only (honoured on localhost only): sign-in codes are
+# returned in the API response and checkouts skip payment.
+DEV_MODE=1
+
+# Token for the website admin page (/admin). Production: `npx wrangler secret put ADMIN_TOKEN`.
+ADMIN_TOKEN=

@@ -1,16 +1,8 @@
 import { Check } from "lucide-react";
 import { useAuth } from "../auth";
 
-// Paid model per company/business-model.md: core free forever, Cloud Backup
-// one-time per migration by size, Corporate per-seat. Checkout + entitlements
-// ship with the accounts launch — until then tier choice is saved as a
-// preference, and uploads run open. Prices are illustrative until benchmarked.
-
-const TIERS = [
-  { size: "Up to 50 GB", price: "~$5" },
-  { size: "Up to 200 GB", price: "~$15" },
-  { size: "Up to 1 TB", price: "~$40" },
-];
+// Cloud Backup is free for now (server flag CLOUD_FREE — no payment provider
+// yet). The paid tiers in company/business-model.md return when payments do.
 
 export function Pricing({ onAccount }: { onAccount: () => void }) {
   const { account, plannedTier, setPlannedTier } = useAuth();
@@ -50,50 +42,24 @@ export function Pricing({ onAccount }: { onAccount: () => void }) {
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <div className="font-semibold text-lg">Cloud Backup</div>
+          <div className="text-3xl font-bold my-2">
+            $0 <span className="text-base font-normal text-gray-500">for now</span>
+          </div>
           <div className="text-sm text-gray-500 mb-3">
-            One-time charge per migration, priced by total backup size. A second encrypted copy
-            in the cloud — for USBs that are too small, or just extra safety.
+            A second encrypted copy of your backup in Ferry's cloud — for a lost or damaged USB.
           </div>
           <ul className="text-sm space-y-2">
-            {TIERS.map(t => {
-              const chosen = plannedTier === t.size;
-              return (
-                <li key={t.size}>
-                  <button
-                    onClick={() => {
-                      if (!account) {
-                        onAccount();
-                        return;
-                      }
-                      setPlannedTier(chosen ? null : t.size);
-                    }}
-                    title={
-                      account
-                        ? "Save as your planned tier"
-                        : "Sign in to save a planned tier"
-                    }
-                    className={`w-full flex justify-between border-b border-gray-100 py-1.5 px-2 rounded transition ${
-                      chosen ? "bg-brand-50 border-brand-300" : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <span>
-                      {t.size} {chosen && <span className="text-brand-700 font-medium">✓ planned</span>}
-                    </span>
-                    <span className="font-medium">{t.price}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {[
+              "Up to 50 GB per backup",
+              "Kept 30 days, then deleted",
+              "Sign in with your email — no password",
+              "Encrypted on your PC before upload",
+            ].map(f => (
+              <li key={f} className="flex gap-2">
+                <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5" /> {f}
+              </li>
+            ))}
           </ul>
-          <p className="text-xs text-gray-500 mt-3">
-            One-time per migration — never a subscription for individuals. Checkout opens with
-            the accounts launch; uploads run open until then.
-          </p>
-          {!account && (
-            <button onClick={onAccount} className="mt-2 w-full text-sm text-brand-700 hover:text-brand-600">
-              Create a free account to reserve your cloud identity →
-            </button>
-          )}
         </div>
       </div>
 

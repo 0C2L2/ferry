@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your account — Ferry</title>
+  <meta name="description" content="Sign in to see, link or delete your Ferry cloud backup.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.png">
+  <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/session.js"></script>
+  <script type="module" src="/account.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site">
+    <div class="wrap bar">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="28" height="28">Ferry</a>
+      <nav class="nav" aria-label="Main">
+        <a class="opt" href="/#how">How it works</a>
+        <a class="opt" href="/faq">FAQ</a>
+        <a class="opt" href="/contact">Contact</a>
+        <a href="/account" data-auth-link>Sign in</a>
+        <details class="theme">
+          <summary aria-label="Colour theme" title="Colour theme">
+            <svg class="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            <svg class="i-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+            <svg class="i-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+          </summary>
+          <div class="theme-menu" role="group" aria-label="Colour theme">
+            <button type="button" data-theme-set="system" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System</button>
+            <button type="button" data-theme-set="light" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>Light</button>
+            <button type="button" data-theme-set="dark" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>Dark</button>
+          </div>
+        </details>
+        <a class="btn btn-sm" href="/#download">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="narrow">
+    <div class="page-head">
+      <h1>Your Ferry account</h1>
+      <p>See your cloud backup, link it to your email, or delete everything. Restoring happens in the Ferry app on your new computer.</p>
+    </div>
+
+    <div id="status" class="msg hidden"></div>
+
+    <section id="signin" class="panel hidden" aria-labelledby="signin-title">
+      <h2 id="signin-title" class="sr-only">Sign in</h2>
+      <div id="tabs" class="tabs" role="tablist" aria-label="Sign-in method">
+        <button type="button" role="tab" id="tab-email" aria-controls="pane-email" aria-selected="true">Email</button>
+        <button type="button" role="tab" id="tab-code" aria-controls="pane-code" aria-selected="false" tabindex="-1">Restore code</button>
+      </div>
+
+      <div id="pane-email" role="tabpanel" aria-labelledby="tab-email">
+        <form id="email-form" novalidate>
+          <label class="field" for="email">Email address</label>
+          <div class="form-row">
+            <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+            <button class="btn" type="submit">Email me a code</button>
+          </div>
+          <p class="hint">We send a 6-digit code. No password to remember.</p>
+        </form>
+        <form id="verify-form" class="hidden" novalidate>
+          <p>We sent a code to <b id="sent-to"></b>. It works for 10 minutes.</p>
+          <label class="field" for="email-code">6-digit code</label>
+          <div class="form-row">
+            <input id="email-code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required>
+            <button class="btn" type="submit">Sign in</button>
+          </div>
+          <p class="hint"><button type="button" class="link" id="other-email">Use a different email</button> · <button type="button" class="link" id="resend">Send a new code</button></p>
+        </form>
+      </div>
+
+      <div id="pane-code" role="tabpanel" aria-labelledby="tab-code" class="hidden">
+        <form id="code-form" novalidate>
+          <label class="field" for="code">Restore code</label>
+          <div class="form-row">
+            <input id="code" class="code" type="text" autocomplete="off" spellcheck="false" placeholder="FERRY-XXXX-XXXX-XXXX-XXXX" required>
+            <button class="btn" type="submit">Open</button>
+          </div>
+          <p class="hint">Ferry showed this code after your cloud upload.</p>
+        </form>
+      </div>
+      <p id="email-off" class="hint hidden">Email sign-in is coming soon — for now, use the restore code Ferry gave you.</p>
+    </section>
+
+    <div id="dash" class="hidden">
+      <section class="panel" aria-labelledby="backups-title">
+        <div class="panel-head">
+          <div>
+            <h2 id="backups-title">Cloud backups</h2>
+            <p class="hint" id="who"></p>
+          </div>
+          <div class="form-row">
+            <a id="admin-link" class="btn btn-quiet btn-sm hidden" href="/admin">Admin</a>
+            <button id="signout" class="btn btn-quiet btn-sm" type="button">Sign out</button>
+          </div>
+        </div>
+        <div id="loading" class="skeleton" aria-label="Loading your backups"><i></i><i></i></div>
+        <ul id="list" class="backups hidden"></ul>
+        <div id="empty" class="empty hidden">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7.1 9.1 4.75 4.75 0 0 0 7 18.5z"/></svg></div>
+          <h3>No cloud backups yet</h3>
+          <p>At the end of a backup in the Ferry app, choose <b>Back up to Ferry Cloud</b>. It shows up here for 30 days.</p>
+          <a class="btn btn-quiet" href="/#download">Get Ferry</a>
+        </div>
+      </section>
+
+      <section id="claim-panel" class="panel hidden" aria-labelledby="claim-title">
+        <h2 id="claim-title">Add a backup made with a restore code</h2>
+        <p class="hint">Link it to this email, so next time you just sign in — no code needed.</p>
+        <form id="claim-form" class="form-row" novalidate>
+          <label class="sr-only" for="claim-code">Restore code</label>
+          <input id="claim-code" class="code" type="text" autocomplete="off" spellcheck="false" placeholder="FERRY-XXXX-XXXX-XXXX-XXXX" required>
+          <button class="btn btn-quiet" type="submit">Link backup</button>
+        </form>
+      </section>
+
+      <section class="panel danger-zone" aria-labelledby="delete-title">
+        <h2 id="delete-title">Delete everything</h2>
+        <p class="hint" id="delete-text">Deletes all your cloud backups and signs you out everywhere. Your USB backup is not affected.</p>
+        <p><button id="delete-all" class="btn btn-danger" type="button">Delete my account and cloud backups</button></p>
+        <div id="delete-confirm" class="confirm hidden">
+          <span>This can't be undone.</span>
+          <button id="delete-yes" class="btn btn-solid-danger btn-sm" type="button">Yes, delete everything</button>
+          <button id="delete-no" class="btn btn-quiet btn-sm" type="button">Cancel</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap foot">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="22" height="22">Ferry</a>
+      <nav aria-label="Footer">
+        <a href="/faq">FAQ</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <span class="end">© 2026 Ferry</span>
+    </div>
+  </footer>
+</body>
+</html>

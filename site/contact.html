@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact — Ferry</title>
+  <meta name="description" content="Write to the people who make Ferry. Questions, problems with a backup, or ideas — the reply comes to your inbox.">
+  <link rel="canonical" href="https://ferryapp.download/contact">
+  <link rel="icon" href="/favicon.png">
+  <link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/theme.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/session.js"></script>
+  <script type="module" src="/contact.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site">
+    <div class="wrap bar">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="28" height="28">Ferry</a>
+      <nav class="nav" aria-label="Main">
+        <a class="opt" href="/#how">How it works</a>
+        <a class="opt" href="/faq">FAQ</a>
+        <a class="opt" href="/contact">Contact</a>
+        <a href="/account" data-auth-link>Sign in</a>
+        <details class="theme">
+          <summary aria-label="Colour theme" title="Colour theme">
+            <svg class="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            <svg class="i-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+            <svg class="i-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+          </summary>
+          <div class="theme-menu" role="group" aria-label="Colour theme">
+            <button type="button" data-theme-set="system" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System</button>
+            <button type="button" data-theme-set="light" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>Light</button>
+            <button type="button" data-theme-set="dark" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>Dark</button>
+          </div>
+        </details>
+        <a class="btn btn-sm" href="/#download">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <div class="page-head enter">
+      <h1>Talk to the people who make Ferry</h1>
+      <p>A question, a backup that won't finish, an idea — write it here. The reply comes straight to your inbox.</p>
+    </div>
+
+    <div class="contact">
+      <div class="contact-main enter d2">
+        <form id="contact-form" class="panel contact-form" novalidate>
+          <fieldset class="topics">
+            <legend class="field">What's it about?</legend>
+            <div class="chips">
+              <label class="chip"><input type="radio" name="topic" value="A question" checked><span>A question</span></label>
+              <label class="chip"><input type="radio" name="topic" value="Something went wrong"><span>Something went wrong</span></label>
+              <label class="chip"><input type="radio" name="topic" value="Cloud copy or account"><span>Cloud copy or account</span></label>
+              <label class="chip"><input type="radio" name="topic" value="Something else"><span>Something else</span></label>
+            </div>
+          </fieldset>
+
+          <label class="field" for="c-email">Your email</label>
+          <input id="c-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+          <p class="hint">Only used to reply to you.</p>
+
+          <div class="field-row">
+            <label class="field" for="c-message">Message</label>
+            <span id="c-count" class="count">0 / 5,000</span>
+          </div>
+          <textarea id="c-message" name="message" rows="7" maxlength="5000" required></textarea>
+          <p class="lock-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            Never send your backup password or restore code. Ferry will never ask for them.
+          </p>
+
+          <!-- Left empty by people; bots fill it in. -->
+          <div class="hp" aria-hidden="true">
+            <label for="c-website">Website</label>
+            <input id="c-website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div id="status" class="msg hidden"></div>
+          <button class="btn btn-lg send" type="submit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3 10 14"/><path d="m21 3-6.5 18-4.5-7-7-4.5z"/></svg>
+            <span>Send message</span>
+          </button>
+        </form>
+
+        <div id="sent" class="panel sent-panel hidden" tabindex="-1">
+          <svg class="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23"/><path d="m16 27 7 7 14-15"/></svg>
+          <h2>Message sent</h2>
+          <p>Thanks — it's on its way. We'll reply to <b id="sent-to"></b>.</p>
+          <p class="hint">Nothing after a few days? Check your spam folder.</p>
+          <button type="button" class="btn btn-quiet" id="again">Send another message</button>
+        </div>
+      </div>
+
+      <aside class="contact-side enter d3">
+        <figure class="harbor" aria-label="Illustration: a small ferry carries your letter across the water to a lighthouse">
+          <svg viewBox="0 36 480 244" aria-hidden="true">
+            <circle class="orb" cx="86" cy="70" r="28"/>
+            <path class="land" d="M292 200c20-14 46-22 80-24s72-6 108-18v42z"/>
+            <g class="lighthouse">
+              <path class="beam" d="M420 108 480 84v48z"/>
+              <path class="tower" d="M405 190 411 116h18l6 74z"/>
+              <path class="stripe" d="M408.2 150h23.6l1 12h-25.6z"/>
+              <rect class="lamp-room" x="407" y="102" width="26" height="14" rx="3"/>
+              <circle class="lamp" cx="420" cy="109" r="4.5"/>
+              <path class="roof" d="M404 102h32l-16-12z"/>
+            </g>
+            <rect class="water" x="0" y="198" width="480" height="82"/>
+            <path class="wave w1" d="M-60 214q15-6 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+            <path class="wave w2" d="M-60 240q15-6 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+            <path class="wave w3" d="M-60 264q15-6 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+            <path class="route" d="M250 196q90-16 150-8"/>
+            <g class="boat">
+              <g class="bob">
+                <path class="hull" d="M110 200h140l-20 26h-100z"/>
+                <rect class="cabin" x="128" y="170" width="54" height="30" rx="5"/>
+                <path class="window" d="M137 181h12M160 181h12"/>
+                <rect class="letter" x="192" y="172" width="42" height="28" rx="3"/>
+                <path class="flap" d="m193 174 20 13 20-13"/>
+              </g>
+            </g>
+          </svg>
+          <figcaption>Your message crosses to our inbox. The reply sails straight back to yours.</figcaption>
+        </figure>
+
+        <nav class="quick" aria-labelledby="quick-title">
+          <h2 id="quick-title">Quick answers</h2>
+          <ul>
+            <li><a href="/faq?q=forget">I forgot my backup password</a></li>
+            <li><a href="/faq?q=too%20small">My USB drive is too small</a></li>
+            <li><a href="/faq?q=restore%20code">What is a restore code?</a></li>
+            <li><a href="/faq?q=free">Is Ferry really free?</a></li>
+          </ul>
+        </nav>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="wrap foot">
+      <a class="brand" href="/"><img src="/favicon.png" alt="" width="22" height="22">Ferry</a>
+      <nav aria-label="Footer">
+        <a href="/faq">FAQ</a>
+        <a href="/account">Account</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/contact">Contact</a>
+      </nav>
+      <span class="end">© 2026 Ferry</span>
+    </div>
+  </footer>
+</body>
+</html>

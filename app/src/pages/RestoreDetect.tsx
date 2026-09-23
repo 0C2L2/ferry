@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { api, isAssistConfigured } from "../api";
+import { api } from "../api";
+import { CloudSignIn } from "../components/CloudSignIn";
 import { ErrorBox } from "../components/ErrorBox";
-import type { BackupLocation } from "../types";
+import type { BackupLocation, CloudBackup } from "../types";
 
 interface Props {
   onFound: (loc: BackupLocation, password: string, cloudBackupId?: string) => void;
@@ -13,7 +14,12 @@ export function RestoreDetect({ onFound }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
 
+  const [cloudReachable, setCloudReachable] = useState(false);
+  const [emailMode, setEmailMode] = useState(false);
   const [fromCloud, setFromCloud] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [restoreCode, setRestoreCode] = useState("");
+  const [backups, setBackups] = useState<CloudBackup[] | null>(null);
   const [backupId, setBackupId] = useState("");
   const [cloudPassword, setCloudPassword] = useState("");
   const [cloudBusy, setCloudBusy] = useState(false);
@@ -25,7 +31,41 @@ export function RestoreDetect({ onFound }: Props) {
       .then(setLoc)
       .catch(err => setError(String(err)))
       .finally(() => setLoading(false));
+    api
+      .cloudStatus()
+      .then(s => {
+        setCloudReachable(s.reachable);
+        setEmailMode(s.emailSignIn);
+        setSignedIn(s.signedIn);
+      })
+      .catch(() => {});
   }, []);
+
+  // Once signed in, list the backups this account can restore.
+  useEffect(() => {
+    if (!fromCloud || !signedIn) return;
+    api
+      .cloudListBackups()
+      .then(all => {
+        const ready = all.filter(b => b.status === "uploaded");
+        setBackups(ready);
+        if (ready.length > 0) setBackupId(ready[0].id);
+      })
+      .catch(err => setCloudError(String(err)));
+  }, [fromCloud, signedIn]);
+
+  async function signInWithCode() {
+    setCloudBusy(true);
+    setCloudError(null);
+    try {
+      await api.cloudSignInCode(restoreCode.trim());
+      setSignedIn(true);
+    } catch (err) {
+      setCloudError(String(err));
+    } finally {
+      setCloudBusy(false);
+    }
+  }
 
   async function restoreFromCloud() {
     if (!backupId.trim() || !cloudPassword) return;
@@ -49,17 +89,59 @@ export function RestoreDetect({ onFound }: Props) {
       <div className="max-w-xl mx-auto">
         <h2 className="text-xl font-semibold mb-1">Restore from Ferry Cloud</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Enter the backup ID you were shown when you uploaded, and your encryption password.
+          {emailMode
+            ? "Sign in with the email you used when backing up, pick the backup, and enter your backup password."
+            : "Enter the restore code Ferry gave you after the cloud upload, then your backup password."}
         </p>
         {cloudError && <ErrorBox message="Could not restore from the cloud." detail={cloudError} />}
-        <label className="block text-sm font-medium mb-1">Backup ID</label>
-        <input
-          value={backupId}
-          onChange={e => setBackupId(e.target.value)}
-          placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          disabled={cloudBusy}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 text-sm font-mono"
-        />
+        {!signedIn && emailMode && (
+          <CloudSignIn purpose="to find your cloud backup" onSignedIn={() => setSignedIn(true)} />
+        )}
+        {!signedIn && !emailMode && (
+          <div className="flex gap-2 mb-4">
+            <input
+              value={restoreCode}
+              onChange={e => setRestoreCode(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === "Enter" && restoreCode.trim() && void signInWithCode()}
+              placeholder="FERRY-XXXX-XXXX-XXXX-XXXX"
+              disabled={cloudBusy}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+            />
+            <button
+              onClick={() => void signInWithCode()}
+              disabled={cloudBusy || !restoreCode.trim()}
+              className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium disabled:opacity-40 hover:bg-brand-700"
+            >
+              {cloudBusy ? "Checking…" : "Find my backup"}
+            </button>
+          </div>
+        )}
+        {signedIn && backups === null && !cloudError && (
+          <p className="text-sm text-gray-500 animate-pulse mb-3">Looking for your backups…</p>
+        )}
+        {signedIn && backups?.length === 0 && (
+          <p className="text-sm text-gray-600 mb-3">
+            No cloud backups found. They're kept for 30 days after upload.
+          </p>
+        )}
+        {backups && backups.length > 0 && (
+          <>
+            <label className="block text-sm font-medium mb-1">Backup</label>
+            <select
+              value={backupId}
+              onChange={e => setBackupId(e.target.value)}
+              disabled={cloudBusy}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 text-sm"
+            >
+              {backups.map(b => (
+                <option key={b.id} value={b.id}>
+                  Uploaded {new Date(b.created).toLocaleDateString()}
+                  {b.expires ? ` · kept until ${new Date(b.expires).toLocaleDateString()}` : ""}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <label className="block text-sm font-medium mb-1">Backup password</label>
         <input
           type="password"
@@ -129,7 +211,7 @@ export function RestoreDetect({ onFound }: Props) {
           </button>
         </>
       )}
-      {isAssistConfigured() && (
+      {cloudReachable && (
         <button
           onClick={() => setFromCloud(true)}
           className="mt-4 block text-sm text-brand-700 hover:text-brand-600"
